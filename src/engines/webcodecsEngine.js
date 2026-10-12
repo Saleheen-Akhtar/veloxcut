@@ -1,0 +1,159 @@
+import {
+  Input,
+  Output,
+  BlobSource,
+  BufferTarget,
+  Mp4OutputFormat,
+  ALL_FORMATS,
+  Conversion,
+} from 'mediabunny';
+
+function crfToHardwareBitrateBps({ width, height, fps, crf, codec }) {
+  const pixelsPerSec = width * height * fps;
+  const baseBpp = 0.095;
+  const crfMultiplier = Math.pow(2, (23 - crf) / 6);
+  const codecFactor = codec === 'av1' ? 0.62 : codec === 'hevc' ? 0.72 : 1.0;
+
+  const rawBps = pixelsPerSec * baseBpp * crfMultiplier * codecFactor;
+  return Math.max(120_000, Math.min(80_000_000, Math.round(rawBps)));
+}
+
+/**
+ * Pure-browser hardware-accelerated WebCodecs pipeline powered by Mediabunny.
+ * Demuxes packets directly from the File Blob -> Hardware VideoDecoder -> Hardware VideoEncoder
+ * without HTML <video> seeking or FFmpeg.wasm overhead.
+ */
+export async function webcodecsGpuCompress({
+  file,
+  startTime,
+  endTime,
+  width,
+  height,
+  fps,
+  codec = 'h264', // 'h264' | 'hevc' | 'av1'
+  rateControlMode = 'size', // 'size' | 'crf'
+  crf = 24,
+  targetVideoKbps = 1500,
+  audioMode = 'aac', // 'aac' | 'copy' | 'strip'
+  audioBitrateKbps = 128,
+  onProgress,
+  onLog,
+}) {
+  const startWall = performance.now();
+
+  const targetW = Math.max(2, Math.round(width / 2) * 2);
+  const targetH = Math.max(2, Math.round(height / 2) * 2);
+  const numericFps = Number(fps) && fps !== 'original' ? Number(fps) : undefined;
+  const clipDuration = Math.max(0.2, endTime - startTime);
+  const estTotalFrames = Math.max(1, Math.round(clipDuration * (numericFps || 30)));
+
+  const codecMap = {
+    h264: 'avc',
+    hevc: 'hevc',
+    av1: 'av1',
+  };
+  const targetCodec = codecMap[codec] || 'avc';
+
+  const bitrateBps =
+    rateControlMode === 'size'
+      ? Math.max(80_000, Math.round(targetVideoKbps * 1000))
+      : crfToHardwareBitrateBps({
+          width: targetW,
+          height: targetH,
+          fps: numericFps || 30,
+          crf,
+          codec,
+        });
+
+  if (onLog) {
+    onLog(
+      `Starting Mediabunny WebCodecs Direct Pipeline (${targetCodec.toUpperCase()} @ ${targetW}x${targetH}, ${(
+        bitrateBps / 1000
+      ).toFixed(0)} kbps)...`
+    );
+  }
+
+  const input = new Input({
+    source: new BlobSource(file),
+    formats: ALL_FORMATS,
+  });
+
+  const target = new BufferTarget();
+  const output = new Output({
+    format: new Mp4OutputFormat({ fastStart: 'in-memory' }),
+    target,
+  });
+
+  const videoOptions = {
+    width: targetW,
+    height: targetH,
+    codec: targetCodec,
+    bitrate: bitrateBps,
+    hardwareAcceleration: 'prefer-hardware',
+    forceTranscode: true,
+  };
+  if (numericFps) {
+    videoOptions.frameRate = numericFps;
+  }
+
+  const audioOptions =
+    audioMode === 'strip'
+      ? { discard: true }
+      : audioMode === 'copy'
+      ? { forceTranscode: false }
+      : {
+          codec: 'aac',
+          bitrate: (Number(audioBitrateKbps) || 128) * 1000,
+          forceTranscode: true,
+        };
+
+  const conversion = await Conversion.init({
+    input,
+    output,
+    trim: {
+      start: Math.max(0, startTime),
+      end: endTime,
+    },
+    video: videoOptions,
+    audio: audioOptions,
+    showWarnings: false,
+  });
+
+  conversion.onProgress = (prog) => {
+    const clamped = Math.max(0.01, Math.min(0.99, prog || 0));
+    const elapsed = Math.max(0.05, (performance.now() - startWall) / 1000);
+    const doneFrames = Math.round(clamped * estTotalFrames);
+    const currentFps = Math.round(doneFrames / elapsed);
+    if (onProgress) {
+      onProgress({
+        progress: clamped,
+        fps: currentFps,
+        frame: doneFrames,
+        totalFrames: estTotalFrames,
+        speed: `${((clamped * clipDuration) / elapsed).toFixed(1)}x`,
+      });
+    }
+  };
+
+  await conversion.execute();
+
+  const finalBlob = new Blob([target.buffer], { type: 'video/mp4' });
+  const elapsedSec = (performance.now() - startWall) / 1000;
+  const outputFilename = `${file.name.replace(/\.[^/.]+$/, '')}_${codec}_webcodecs.mp4`;
+
+  return {
+    primary: {
+      label: `WebCodecs (${codec.toUpperCase()})`,
+      start: startTime,
+      end: endTime,
+      duration: clipDuration,
+      blob: finalBlob,
+      url: URL.createObjectURL(finalBlob),
+      size: finalBlob.size,
+      filename: outputFilename,
+    },
+    segments: [],
+    elapsedSec,
+    engineUsed: `Mediabunny WebCodecs (${codec.toUpperCase()} Direct Demux)`,
+  };
+}

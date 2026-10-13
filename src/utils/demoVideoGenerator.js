@@ -23,19 +23,49 @@ export async function generateDemoVideoFile() {
     fastStart: 'in-memory',
   });
 
-  const encoder = new window.VideoEncoder({
-    output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
-    error: (e) => console.error(e),
-  });
+  let configured = false;
+  const candidateCodecs = [
+    { codec: 'avc1.4d002a', hardwareAcceleration: 'no-preference' },
+    { codec: 'avc1.420028', hardwareAcceleration: 'no-preference' },
+    { codec: 'avc1.42001f', hardwareAcceleration: 'no-preference' },
+    { codec: 'avc1.640028', hardwareAcceleration: 'prefer-hardware' },
+  ];
 
-  encoder.configure({
-    codec: 'avc1.42001f',
-    width,
-    height,
-    bitrate: 6_500_000, // ~6.5 Mbps so compression savings are clearly visible
-    framerate: fps,
-    hardwareAcceleration: 'prefer-hardware',
-  });
+  let encoder = null;
+  if (typeof window.VideoEncoder === 'function') {
+    try {
+      for (const cand of candidateCodecs) {
+        try {
+          const support = await window.VideoEncoder.isConfigSupported({
+            ...cand,
+            width,
+            height,
+            bitrate: 5_000_000,
+            framerate: fps,
+          });
+          if (support.supported) {
+            encoder = new window.VideoEncoder({
+              output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
+              error: (e) => console.error(e),
+            });
+            encoder.configure({
+              ...cand,
+              width,
+              height,
+              bitrate: 5_000_000,
+              framerate: fps,
+            });
+            configured = true;
+            break;
+          }
+        } catch {
+          // continue
+        }
+      }
+    } catch {
+      // fallback
+    }
+  }
 
   const canvas = document.createElement('canvas');
   canvas.width = width;

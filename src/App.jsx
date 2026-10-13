@@ -26,6 +26,11 @@ import {
   Film,
   Cpu,
   Layers,
+  MessageSquare,
+  Globe,
+  Smartphone,
+  ShieldCheck,
+  Check,
 } from 'lucide-react';
 import {
   formatBytes,
@@ -40,20 +45,32 @@ import { webcodecsGpuCompress } from './engines/webcodecsEngine';
 import { checkNativeNvencStatus, runNativeNvencJob } from './engines/nativeNvencEngine';
 import { generateDemoVideoFile } from './utils/demoVideoGenerator';
 
-// Modern, minimalist vector brand logo
+// Precision vector brand glyph with glowing aperture
 function BrandLogo() {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path
-        d="M3 4.5L12 20L14.5 15.5L7.5 4.5H3Z"
-        fill="#3b82f6"
-      />
-      <path
-        d="M21 4.5L12 20L15.5 20L21 10.5V4.5Z"
-        fill="#60a5fa"
-      />
-      <circle cx="12" cy="7" r="2" fill="#ffffff" />
-    </svg>
+    <div className="brand-logo-wrapper">
+      <svg width="24" height="24" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="vxGrad1" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#00f2fe" />
+            <stop offset="50%" stopColor="#38bdf8" />
+            <stop offset="100%" stopColor="#6366f1" />
+          </linearGradient>
+          <linearGradient id="vxGrad2" x1="100%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor="#38bdf8" />
+            <stop offset="100%" stopColor="#0284c7" />
+          </linearGradient>
+          <filter id="vxGlow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="1.5" result="blur" />
+            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+          </filter>
+        </defs>
+        <rect x="2" y="2" width="24" height="24" rx="7" fill="#10131d" stroke="rgba(255,255,255,0.14)" strokeWidth="1" />
+        <path d="M7 7.5L12.5 20.5L14 17L9.5 7.5H7Z" fill="url(#vxGrad1)" />
+        <path d="M21 7.5L15 20.5L13.8 20.5L18.5 10H14.5L15.5 7.5H21Z" fill="url(#vxGrad2)" />
+        <circle cx="14" cy="14" r="1.5" fill="#38bdf8" filter="url(#vxGlow)" />
+      </svg>
+    </div>
   );
 }
 
@@ -190,6 +207,18 @@ export default function App() {
     }
     return Math.max(0.1, (activeSegment?.end || meta.duration) - (activeSegment?.start || 0));
   }, [workflowMode, segments, activeSegment, meta.duration]);
+
+  // Realistic simulated audio waveform heights
+  const waveformBars = useMemo(() => {
+    const bars = [];
+    const count = 90;
+    for (let i = 0; i < count; i++) {
+      const seed = Math.sin(i * 0.45) * 0.35 + Math.cos(i * 0.85) * 0.25 + Math.sin(i * 2.1) * 0.15;
+      const heightPct = Math.max(16, Math.min(94, Math.round((seed + 0.55) * 85)));
+      bars.push(heightPct);
+    }
+    return bars;
+  }, []);
 
   // Target dimensions & bitrates
   const targetDims = useMemo(
@@ -732,16 +761,17 @@ export default function App() {
       <header className="nle-topbar">
         <div className="topbar-left">
           <div className="app-brand" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
-            <div className="app-brand-logo">
-              <BrandLogo />
+            <BrandLogo />
+            <div className="app-brand-title-group">
+              <span className="app-brand-name">VELOX<span className="app-brand-accent">CUT</span></span>
+              <span className="app-brand-badge">STUDIO</span>
             </div>
-            <span className="app-brand-title">VeloxCut</span>
           </div>
 
           <div className="topbar-mode-selector">
             <button
               type="button"
-              className={`mode-toggle-btn ${workflowMode === 'lossless' ? 'active' : ''}`}
+              className={`mode-toggle-btn ${workflowMode === 'lossless' ? 'active cut' : ''}`}
               onClick={() => setWorkflowMode('lossless')}
             >
               <Scissors size={13} />
@@ -749,7 +779,7 @@ export default function App() {
             </button>
             <button
               type="button"
-              className={`mode-toggle-btn ${workflowMode === 'compress' ? 'active' : ''}`}
+              className={`mode-toggle-btn ${workflowMode === 'compress' ? 'active compress' : ''}`}
               onClick={() => setWorkflowMode('compress')}
             >
               <Zap size={13} />
@@ -859,14 +889,21 @@ export default function App() {
                 className={`empty-hero-dropzone ${isDragOver ? 'drag-active' : ''}`}
                 onClick={() => fileInputRef.current?.click()}
               >
-                <div className="dropzone-upload-icon">
-                  <Film size={24} />
+                <div className="dropzone-eyebrow-badge">
+                  <ShieldCheck size={12} />
+                  <span>100% PRIVATE • CLIENT-SIDE GPU ENGINE</span>
                 </div>
+
+                <div className="dropzone-aperture-icon">
+                  <Film size={28} />
+                </div>
+
                 <h2>Drop a video file to begin</h2>
                 <p>
                   Perform instant stream-copy cuts in 0.2s or compress video with 99% visually lossless GPU
-                  encoding. Everything runs locally on your machine.
+                  encoding. Everything executes locally in your browser.
                 </p>
+
                 <div className="dropzone-actions">
                   <button
                     type="button"
@@ -886,9 +923,41 @@ export default function App() {
                       handleLoadDemo();
                     }}
                   >
-                    <Sparkles size={14} style={{ color: '#38bdf8' }} /> Try 1080p Demo
+                    <Sparkles size={14} style={{ color: '#38bdf8' }} /> Try 1080p Demo Clip
                   </button>
                 </div>
+
+                <div className="dropzone-feature-grid">
+                  <div className="dropzone-feat-card">
+                    <span className="dropzone-feat-icon">✂️</span>
+                    <div className="dropzone-feat-text">
+                      <strong>Instant Lossless Cut</strong>
+                      <span>Export in 0.2s with 0% quality loss</span>
+                    </div>
+                  </div>
+                  <div className="dropzone-feat-card">
+                    <span className="dropzone-feat-icon">⚡</span>
+                    <div className="dropzone-feat-text">
+                      <strong>Hardware Acceleration</strong>
+                      <span>Native NVIDIA NVENC &amp; WebCodecs GPU</span>
+                    </div>
+                  </div>
+                  <div className="dropzone-feat-card">
+                    <span className="dropzone-feat-icon">🎯</span>
+                    <div className="dropzone-feat-text">
+                      <strong>Target Size Clamping</strong>
+                      <span>Auto-tune for Discord 10MB &amp; Web 25MB</span>
+                    </div>
+                  </div>
+                  <div className="dropzone-feat-card">
+                    <span className="dropzone-feat-icon">🔒</span>
+                    <div className="dropzone-feat-text">
+                      <strong>Zero Cloud Uploads</strong>
+                      <span>100% private, files never leave your PC</span>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="dropzone-specs">
                   <span>MP4</span>
                   <span>•</span>
@@ -898,7 +967,7 @@ export default function App() {
                   <span>•</span>
                   <span>WEBM</span>
                   <span>•</span>
-                  <span>Client-side GPU</span>
+                  <span>H.264 / HEVC / AV1</span>
                 </div>
               </div>
             ) : (
@@ -1131,7 +1200,10 @@ export default function App() {
                         className={`preset-chip-card ${activeQuickPreset === 'best' ? 'active' : ''}`}
                         onClick={() => applyQuickPreset('best')}
                       >
-                        <span className="chip-title">Auto Lossless</span>
+                        <div className="chip-title-row">
+                          <Zap size={13} className="chip-icon" />
+                          <span className="chip-title">Auto Lossless</span>
+                        </div>
                         <span className="chip-sub">99% sharp • ~55% smaller</span>
                       </button>
                       <button
@@ -1139,7 +1211,10 @@ export default function App() {
                         className={`preset-chip-card ${activeQuickPreset === 'discord' ? 'active' : ''}`}
                         onClick={() => applyQuickPreset('discord')}
                       >
-                        <span className="chip-title">Discord 10 MB</span>
+                        <div className="chip-title-row">
+                          <MessageSquare size={13} className="chip-icon" />
+                          <span className="chip-title">Discord 10 MB</span>
+                        </div>
                         <span className="chip-sub">Auto clamp bitrate</span>
                       </button>
                       <button
@@ -1147,7 +1222,10 @@ export default function App() {
                         className={`preset-chip-card ${activeQuickPreset === 'web' ? 'active' : ''}`}
                         onClick={() => applyQuickPreset('web')}
                       >
-                        <span className="chip-title">Web 25 MB</span>
+                        <div className="chip-title-row">
+                          <Globe size={13} className="chip-icon" />
+                          <span className="chip-title">Web 25 MB</span>
+                        </div>
                         <span className="chip-sub">1080p web share</span>
                       </button>
                       <button
@@ -1155,7 +1233,10 @@ export default function App() {
                         className={`preset-chip-card ${activeQuickPreset === 'slim' ? 'active' : ''}`}
                         onClick={() => applyQuickPreset('slim')}
                       >
-                        <span className="chip-title">Compact 720p</span>
+                        <div className="chip-title-row">
+                          <Smartphone size={13} className="chip-icon" />
+                          <span className="chip-title">Compact 720p</span>
+                        </div>
                         <span className="chip-sub">Maximum shrinkage</span>
                       </button>
                     </div>
@@ -1425,54 +1506,64 @@ export default function App() {
                 </>
               )}
 
-              {/* Output Done Card */}
-              {outputResult?.primary && (
-                <div className="done-result-box">
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontWeight: 600 }}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#34d399' }}>
-                      <CheckCircle2 size={15} /> Ready in {outputResult.elapsedSec.toFixed(1)}s
-                    </span>
-                    <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
-                      Saved {savingsPct}%
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    className="btn btn-green btn-sm"
-                    style={{ width: '100%' }}
-                    onClick={() => triggerDownload(outputResult.primary)}
-                  >
-                    <Download size={13} /> Download Video
-                  </button>
-                </div>
-              )}
+              {/* Output Done Card in Scroll Body if needed */}
             </div>
 
             {/* Inspector Footer CTA */}
             {videoFile && (
               <div className="inspector-footer">
-                <button
-                  type="button"
-                  className={`btn ${workflowMode === 'lossless' ? 'btn-green' : 'btn-primary'}`}
-                  style={{ width: '100%', padding: '9px 14px' }}
-                  disabled={isProcessing}
-                  onClick={handleRunAction}
-                >
-                  {isProcessing ? (
-                    <>
-                      Encoding... {Math.round(progress * 100)}%
-                      {encodingStats.fps > 0 ? ` (${encodingStats.fps} fps)` : ''}
-                    </>
-                  ) : workflowMode === 'lossless' ? (
-                    <>
-                      <Scissors size={14} /> Export Lossless Cut
-                    </>
-                  ) : (
-                    <>
-                      <Zap size={14} /> Compress ({codec.toUpperCase()})
-                    </>
-                  )}
-                </button>
+                {outputResult?.primary ? (
+                  <div className="done-result-box">
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontWeight: 600 }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#34d399' }}>
+                        <CheckCircle2 size={15} /> Ready in {outputResult.elapsedSec.toFixed(1)}s
+                      </span>
+                      <span className="savings-tag">
+                        Saved {savingsPct}%
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-green"
+                      style={{ width: '100%', padding: '10px 14px' }}
+                      onClick={() => triggerDownload(outputResult.primary)}
+                    >
+                      <Download size={14} /> Download Output ({formatBytes(outputResult.primary.size)})
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      style={{ width: '100%', color: 'var(--text-muted)' }}
+                      onClick={handleRunAction}
+                      disabled={isProcessing}
+                    >
+                      Re-encode clip
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className={`btn ${workflowMode === 'lossless' ? 'btn-green' : 'btn-primary'}`}
+                    style={{ width: '100%', padding: '10px 14px' }}
+                    disabled={isProcessing}
+                    onClick={handleRunAction}
+                  >
+                    {isProcessing ? (
+                      <>
+                        Encoding... {Math.round(progress * 100)}%
+                        {encodingStats.fps > 0 ? ` (${encodingStats.fps} fps)` : ''}
+                      </>
+                    ) : workflowMode === 'lossless' ? (
+                      <>
+                        <Scissors size={14} /> Export Lossless Cut
+                      </>
+                    ) : (
+                      <>
+                        <Zap size={14} /> Compress ({codec.toUpperCase()})
+                      </>
+                    )}
+                  </button>
+                )}
 
                 {isProcessing && (
                   <div className="progress-strip">
@@ -1643,100 +1734,154 @@ export default function App() {
             <span>{formatTimecode(meta.duration, false)}</span>
           </div>
 
-          <div
-            ref={timelineRef}
-            className="timeline-scroll-stage"
-            onMouseMove={(e) => {
-              const sec = getTimelineSeconds(e.clientX);
-              setHoverTime(sec);
-            }}
-            onMouseLeave={() => setHoverTime(null)}
-            onMouseDown={(e) => {
-              const sec = getTimelineSeconds(e.clientX);
-              setCurrentTime(sec);
-              if (videoRef.current) videoRef.current.currentTime = sec;
-              if (wipeVideoRef.current) wipeVideoRef.current.currentTime = sec;
-              setDragState({ type: 'playhead' });
-            }}
-          >
-            {/* Filmstrip */}
-            {filmstrip.length > 0 && (
-              <div className="filmstrip-backdrop">
-                {filmstrip.map((src, idx) => (
-                  <img key={idx} src={src} alt="" className="filmstrip-cell" />
-                ))}
+          <div className="timeline-tracks-stack">
+            {/* V1 Video Track */}
+            <div className="timeline-track-row">
+              <div className="timeline-track-header v1">
+                <Film size={12} />
+                <span>V1</span>
               </div>
-            )}
+              <div
+                ref={timelineRef}
+                className="timeline-scroll-stage"
+                onMouseMove={(e) => {
+                  const sec = getTimelineSeconds(e.clientX);
+                  setHoverTime(sec);
+                }}
+                onMouseLeave={() => setHoverTime(null)}
+                onMouseDown={(e) => {
+                  const sec = getTimelineSeconds(e.clientX);
+                  setCurrentTime(sec);
+                  if (videoRef.current) videoRef.current.currentTime = sec;
+                  if (wipeVideoRef.current) wipeVideoRef.current.currentTime = sec;
+                  setDragState({ type: 'playhead' });
+                }}
+              >
+                {/* Filmstrip */}
+                {filmstrip.length > 0 && (
+                  <div className="filmstrip-backdrop">
+                    {filmstrip.map((src, idx) => (
+                      <img key={idx} src={src} alt="" className="filmstrip-cell" />
+                    ))}
+                  </div>
+                )}
 
-            {/* Hover Indicator */}
-            {hoverTime !== null && meta.duration > 0 && (
-              <>
+                {/* Hover Indicator */}
+                {hoverTime !== null && meta.duration > 0 && (
+                  <>
+                    <div
+                      className="timeline-hover-cursor"
+                      style={{ left: `${(hoverTime / meta.duration) * 100}%` }}
+                    />
+                    <div
+                      className="timeline-hover-bubble"
+                      style={{
+                        left: `${Math.max(4, Math.min(96, (hoverTime / meta.duration) * 100))}%`,
+                      }}
+                    >
+                      {formatTimecode(hoverTime)}
+                    </div>
+                  </>
+                )}
+
+                {/* Clamped Segment Range */}
+                {segments.map((seg, index) => {
+                  const leftPct = meta.duration ? (seg.start / meta.duration) * 100 : 0;
+                  const widthPct = meta.duration
+                    ? Math.max(0.6, ((seg.end - seg.start) / meta.duration) * 100)
+                    : 100;
+                  const isActive = seg.id === activeSegId;
+
+                  return (
+                    <div
+                      key={seg.id}
+                      className={`timeline-segment-range ${isActive ? 'active' : ''}`}
+                      style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        setActiveSegId(seg.id);
+                      }}
+                    >
+                      <div
+                        className="segment-edge-handle"
+                        title="Drag In-Point"
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                          setActiveSegId(seg.id);
+                          setDragState({ type: 'start', segId: seg.id });
+                        }}
+                      />
+                      <span className="segment-title-text">
+                        Clip {index + 1} ({formatTimecode(seg.start, false)} - {formatTimecode(seg.end, false)})
+                      </span>
+                      <div
+                        className="segment-edge-handle"
+                        title="Drag Out-Point"
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                          setActiveSegId(seg.id);
+                          setDragState({ type: 'end', segId: seg.id });
+                        }}
+                      />
+                    </div>
+                  );
+                })}
+
+                {/* Playhead */}
                 <div
-                  className="timeline-hover-cursor"
-                  style={{ left: `${(hoverTime / meta.duration) * 100}%` }}
-                />
-                <div
-                  className="timeline-hover-bubble"
+                  className="timeline-playhead-line"
                   style={{
-                    left: `${Math.max(4, Math.min(96, (hoverTime / meta.duration) * 100))}%`,
+                    left: `${meta.duration ? (currentTime / meta.duration) * 100 : 0}%`,
                   }}
                 >
-                  {formatTimecode(hoverTime)}
+                  <div className="timeline-playhead-head" />
                 </div>
-              </>
-            )}
+              </div>
+            </div>
 
-            {/* Clamped Segment Range */}
-            {segments.map((seg, index) => {
-              const leftPct = meta.duration ? (seg.start / meta.duration) * 100 : 0;
-              const widthPct = meta.duration
-                ? Math.max(0.6, ((seg.end - seg.start) / meta.duration) * 100)
-                : 100;
-              const isActive = seg.id === activeSegId;
+            {/* A1 Audio Track */}
+            <div className="timeline-track-row">
+              <div className="timeline-track-header a1">
+                <Volume2 size={12} />
+                <span>A1</span>
+              </div>
+              <div
+                className="timeline-scroll-stage"
+                onMouseMove={(e) => {
+                  const sec = getTimelineSeconds(e.clientX);
+                  setHoverTime(sec);
+                }}
+                onMouseLeave={() => setHoverTime(null)}
+                onMouseDown={(e) => {
+                  const sec = getTimelineSeconds(e.clientX);
+                  setCurrentTime(sec);
+                  if (videoRef.current) videoRef.current.currentTime = sec;
+                  if (wipeVideoRef.current) wipeVideoRef.current.currentTime = sec;
+                  setDragState({ type: 'playhead' });
+                }}
+              >
+                <div className="audio-waveform-backdrop">
+                  {waveformBars.map((heightPct, idx) => {
+                    const barTime = meta.duration ? (idx / waveformBars.length) * meta.duration : 0;
+                    const inSeg = activeSegment && barTime >= activeSegment.start && barTime <= activeSegment.end;
+                    return (
+                      <div
+                        key={idx}
+                        className={`audio-waveform-bar ${inSeg ? 'in-segment' : ''}`}
+                        style={{ height: `${heightPct}%` }}
+                      />
+                    );
+                  })}
+                </div>
 
-              return (
+                {/* Playhead on A1 track as well */}
                 <div
-                  key={seg.id}
-                  className={`timeline-segment-range ${isActive ? 'active' : ''}`}
-                  style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
-                  onMouseDown={(e) => {
-                    e.stopPropagation();
-                    setActiveSegId(seg.id);
+                  className="timeline-playhead-line"
+                  style={{
+                    left: `${meta.duration ? (currentTime / meta.duration) * 100 : 0}%`,
                   }}
-                >
-                  <div
-                    className="segment-edge-handle"
-                    title="Drag In-Point"
-                    onMouseDown={(e) => {
-                      e.stopPropagation();
-                      setActiveSegId(seg.id);
-                      setDragState({ type: 'start', segId: seg.id });
-                    }}
-                  />
-                  <span className="segment-title-text">
-                    Clip {index + 1} ({formatTimecode(seg.start, false)} - {formatTimecode(seg.end, false)})
-                  </span>
-                  <div
-                    className="segment-edge-handle"
-                    title="Drag Out-Point"
-                    onMouseDown={(e) => {
-                      e.stopPropagation();
-                      setActiveSegId(seg.id);
-                      setDragState({ type: 'end', segId: seg.id });
-                    }}
-                  />
-                </div>
-              );
-            })}
-
-            {/* Playhead */}
-            <div
-              className="timeline-playhead-line"
-              style={{
-                left: `${meta.duration ? (currentTime / meta.duration) * 100 : 0}%`,
-              }}
-            >
-              <div className="timeline-playhead-head" />
+                />
+              </div>
             </div>
           </div>
         </div>

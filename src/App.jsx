@@ -8,7 +8,6 @@ import {
   SkipBack,
   SkipForward,
   Download,
-  Cpu,
   Gauge,
   Volume2,
   VolumeX,
@@ -28,6 +27,9 @@ import {
   Keyboard,
   X,
   Sliders,
+  Maximize2,
+  Activity,
+  Cpu,
 } from 'lucide-react';
 import {
   formatBytes,
@@ -41,6 +43,44 @@ import { losslessSplitOrTrim, wasmCompressVideo } from './engines/ffmpegEngine';
 import { webcodecsGpuCompress } from './engines/webcodecsEngine';
 import { checkNativeNvencStatus, runNativeNvencJob } from './engines/nativeNvencEngine';
 import { generateDemoVideoFile } from './utils/demoVideoGenerator';
+
+// Custom Supersonic Kinetic Delta Logo
+function VeloxLogo() {
+  return (
+    <div className="brand-vector-mark">
+      <svg
+        width="24"
+        height="24"
+        viewBox="0 0 28 28"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          d="M3 4L13 24L16 18L7.5 4H3Z"
+          fill="url(#velox-grad-amber)"
+        />
+        <path
+          d="M25 4L15 24L12 18L20.5 4H25Z"
+          fill="url(#velox-grad-cyan)"
+        />
+        <path
+          d="M14 2L15.8 8.5H12.2L14 2Z"
+          fill="#fde047"
+        />
+        <defs>
+          <linearGradient id="velox-grad-amber" x1="3" y1="4" x2="16" y2="24" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#f59e0b" />
+            <stop offset="1" stopColor="#ea580c" />
+          </linearGradient>
+          <linearGradient id="velox-grad-cyan" x1="25" y1="4" x2="12" y2="24" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#22d3ee" />
+            <stop offset="1" stopColor="#0284c7" />
+          </linearGradient>
+        </defs>
+      </svg>
+    </div>
+  );
+}
 
 export default function App() {
   // Video File & Metadata State
@@ -57,6 +97,7 @@ export default function App() {
 
   // Player & Timeline State
   const videoRef = useRef(null);
+  const wipeVideoRef = useRef(null);
   const timelineRef = useRef(null);
   const fileInputRef = useRef(null);
   const savedTimeRef = useRef(0);
@@ -66,7 +107,12 @@ export default function App() {
   const [loopSegment, setLoopSegment] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [hoverTime, setHoverTime] = useState(null);
-  const [previewMode, setPreviewMode] = useState('original'); // 'original' | 'output'
+  
+  // Preview modes: 'original' | 'output' | 'split-wipe'
+  const [previewMode, setPreviewMode] = useState('original');
+  const [wipePercent, setWipePercent] = useState(50);
+  const [isDraggingWipe, setIsDraggingWipe] = useState(false);
+  
   const [filmstrip, setFilmstrip] = useState([]);
   const [dragState, setDragState] = useState(null);
 
@@ -95,7 +141,7 @@ export default function App() {
   const [engineType, setEngineType] = useState('nvenc'); // 'nvenc' | 'webcodecs' | 'wasm'
   const [codec, setCodec] = useState('hevc'); // 'hevc' | 'h264' | 'av1'
   const [rateControlMode, setRateControlMode] = useState('crf'); // 'crf' | 'size'
-  const [crf, setCrf] = useState(20); // CQ 20 = Visually Lossless
+  const [crf, setCrf] = useState(20);
   const [psychoVisualHq, setPsychoVisualHq] = useState(true);
   const [targetSizeMB, setTargetSizeMB] = useState(15);
   const [targetSizePct, setTargetSizePct] = useState(50);
@@ -148,7 +194,7 @@ export default function App() {
           setEngineType('nvenc');
           setCodec('hevc');
           appendLog(
-            'NVIDIA NVENC Psycho-Visual HQ Ready (HEVC / H.264 2-Pass FullRes + Spatial/Temporal AQ).'
+            'NVIDIA NVENC Hardware Accelerator online. HEVC & H.264 Psycho-Visual 2-Pass Lookahead ready.'
           );
         } else if (caps.webcodecsAvailable) {
           setEngineType('webcodecs');
@@ -201,13 +247,13 @@ export default function App() {
     [targetSizeMB, selectedDuration, audioMode, audioBitrateKbps]
   );
 
-  // Bits-Per-Pixel (BPP) Quality Health score
+  // Quality Health assessment
   const qualityHealth = useMemo(() => {
     if (rateControlMode === 'crf') {
-      if (crf <= 20) return { label: '99% Visually Lossless', color: '#34d399', needsOptimize: false };
-      if (crf <= 23) return { label: '96% Razor Sharp HQ', color: '#38bdf8', needsOptimize: false };
-      if (crf <= 26) return { label: '90% Balanced Clarity', color: '#fbbf24', needsOptimize: false };
-      return { label: 'Compact Size Mode', color: '#fb923c', needsOptimize: false };
+      if (crf <= 20) return { label: '99% Visually Lossless', color: '#f59e0b', needsOptimize: false };
+      if (crf <= 23) return { label: '96% Studio HQ', color: '#38bdf8', needsOptimize: false };
+      if (crf <= 26) return { label: '90% Balanced Clarity', color: '#10b981', needsOptimize: false };
+      return { label: 'Ultra-Slim File', color: '#fb923c', needsOptimize: false };
     }
 
     const effFps = fpsPreset === 'original' ? meta.fps || 30 : Number(fpsPreset);
@@ -216,14 +262,14 @@ export default function App() {
     const effectiveBpp = ((bitratePlan.videoKbps * 1000) / Math.max(1, pixelsPerSec)) * codecBoost;
 
     if (effectiveBpp >= 0.075) {
-      return { label: '99% Crisp Quality', color: '#34d399', needsOptimize: false };
+      return { label: '99% Sharp Target Fit', color: '#34d399', needsOptimize: false };
     }
     if (effectiveBpp >= 0.045) {
-      return { label: 'Good Visual Clarity', color: '#38bdf8', needsOptimize: false };
+      return { label: 'Balanced Target Clarity', color: '#38bdf8', needsOptimize: false };
     }
     return {
-      label: 'Low Bitrate for Current Res',
-      color: '#fb923c',
+      label: 'Tight Bitrate for Resolution',
+      color: '#f97316',
       needsOptimize: true,
     };
   }, [rateControlMode, crf, fpsPreset, meta.fps, targetDims, codec, bitratePlan.videoKbps]);
@@ -238,10 +284,10 @@ export default function App() {
     } else if (targetDims.height > 720) {
       setResolutionPreset('720');
     }
-    showToast(`Auto-optimized settings for ${targetSizeMB} MB target`);
+    showToast(`Conditioned parameters for ${targetSizeMB} MB target`);
   };
 
-  // Detect active 1-click quick preset
+  // 1-Click Quick Presets detection
   const activeQuickPreset = useMemo(() => {
     if (
       rateControlMode === 'crf' &&
@@ -272,7 +318,7 @@ export default function App() {
       setResolutionPreset('original');
       setFpsPreset('original');
       setAudioMode('copy');
-      showToast('Applied Smart Auto (Visually Lossless)');
+      showToast('Engaged Zero Loss (CQ 19 HEVC)');
     } else if (id === 'discord-10') {
       setRateControlMode('size');
       setTargetSizeMB(10);
@@ -280,14 +326,14 @@ export default function App() {
       setPsychoVisualHq(true);
       setAudioMode('aac');
       setAudioBitrateKbps(128);
-      showToast('Applied 10 MB Target Preset');
+      showToast('Clamped Bitrate to 10 MB (Discord)');
     } else if (id === 'share-25') {
       setRateControlMode('size');
       setTargetSizeMB(25);
       setCodec('hevc');
       setPsychoVisualHq(true);
       setAudioMode('copy');
-      showToast('Applied 25 MB Share Preset');
+      showToast('Set 25 MB Web Stream Target');
     } else if (id === 'compact-720') {
       setRateControlMode('crf');
       setCrf(25);
@@ -295,7 +341,7 @@ export default function App() {
       setCodec('hevc');
       setAudioMode('aac');
       setAudioBitrateKbps(128);
-      showToast('Applied Fast 720p Compact Preset');
+      showToast('Configured Ultra-Slim 720p');
     }
   };
 
@@ -339,7 +385,7 @@ export default function App() {
     audioBitrateKbps,
   ]);
 
-  // Generate filmstrip thumbnails in the background when a video is loaded
+  // Filmstrip Thumbnails
   const generateFilmstrip = useCallback(async (url, duration) => {
     if (!url || !duration || duration <= 0) return;
     try {
@@ -374,11 +420,11 @@ export default function App() {
       }
       setFilmstrip(thumbs);
     } catch {
-      // Ignore filmstrip errors
+      // Ignore background thumb errors
     }
   }, []);
 
-  // Load a video File into the editor
+  // Load Video File
   const loadFile = useCallback(
     (file) => {
       if (!file) return;
@@ -447,15 +493,15 @@ export default function App() {
       setErrorMsg('');
       const demoFile = await generateDemoVideoFile();
       loadFile(demoFile);
-      showToast('Loaded 4-Scene Demo Video');
+      showToast('Loaded 4-Scene 1080p Studio Clip');
     } catch (err) {
-      setErrorMsg(`Could not generate demo video: ${err.message}`);
+      setErrorMsg(`Could not generate demo: ${err.message}`);
     } finally {
       setIsGeneratingDemo(false);
     }
   };
 
-  // Switch between Original and Output Preview while preserving exact timestamp
+  // Preview Mode Switcher with Timestamp Sync
   const handleSwitchPreviewMode = useCallback(
     (nextMode) => {
       if (nextMode === previewMode) return;
@@ -467,14 +513,14 @@ export default function App() {
     [previewMode]
   );
 
-  // Timeline Operations
+  // In / Out / Split Operations
   const setInPoint = useCallback(() => {
     if (!meta.duration) return;
     const clamped = Math.min(currentTime, activeSegment.end - 0.1);
     setSegments((prev) =>
       prev.map((s) => (s.id === activeSegId ? { ...s, start: clamped } : s))
     );
-    showToast(`Start set to ${formatTimecode(clamped)}`);
+    showToast(`[ In-Point set: ${formatTimecode(clamped)}`);
   }, [activeSegId, activeSegment.end, currentTime, meta.duration, showToast]);
 
   const setOutPoint = useCallback(() => {
@@ -483,7 +529,7 @@ export default function App() {
     setSegments((prev) =>
       prev.map((s) => (s.id === activeSegId ? { ...s, end: clamped } : s))
     );
-    showToast(`End set to ${formatTimecode(clamped)}`);
+    showToast(`Out-Point set: ${formatTimecode(clamped)} ]`);
   }, [activeSegId, activeSegment.start, currentTime, meta.duration, showToast]);
 
   const splitAtPlayhead = useCallback(() => {
@@ -492,7 +538,7 @@ export default function App() {
       (s) => currentTime > s.start + 0.15 && currentTime < s.end - 0.15
     );
     if (!target) {
-      showToast('Move playhead inside a clip to split');
+      showToast('Scrub playhead inside clip to split');
       return;
     }
 
@@ -508,7 +554,7 @@ export default function App() {
           id: newId,
           start: currentTime,
           end: s.end,
-          label: `Segment ${segments.length + 1}`,
+          label: `Clip ${segments.length + 1}`,
         });
       } else {
         updated.push(s);
@@ -528,11 +574,11 @@ export default function App() {
       id: newId,
       start,
       end,
-      label: `Segment ${segments.length + 1}`,
+      label: `Clip ${segments.length + 1}`,
     };
     setSegments((prev) => [...prev, nextSeg]);
     setActiveSegId(newId);
-    showToast(`Added Clip #${segments.length + 1}`);
+    showToast(`Registered Clip #${segments.length + 1}`);
   };
 
   const removeSegment = (id) => {
@@ -549,7 +595,7 @@ export default function App() {
     const initial = { id: 'seg-1', start: 0, end: meta.duration, label: 'Segment 1' };
     setSegments([initial]);
     setActiveSegId('seg-1');
-    showToast('Reset trim to full video');
+    showToast('Reset timeline boundaries');
   };
 
   const togglePlay = useCallback(() => {
@@ -558,9 +604,11 @@ export default function App() {
     if (v.paused) {
       v.play();
       setIsPlaying(true);
+      if (wipeVideoRef.current) wipeVideoRef.current.play();
     } else {
       v.pause();
       setIsPlaying(false);
+      if (wipeVideoRef.current) wipeVideoRef.current.pause();
     }
   }, []);
 
@@ -574,9 +622,8 @@ export default function App() {
   const handleSpeedChange = (rate) => {
     const num = Number(rate) || 1;
     setPlaybackRate(num);
-    if (videoRef.current) {
-      videoRef.current.playbackRate = num;
-    }
+    if (videoRef.current) videoRef.current.playbackRate = num;
+    if (wipeVideoRef.current) wipeVideoRef.current.playbackRate = num;
   };
 
   const stepFrame = useCallback(
@@ -588,6 +635,7 @@ export default function App() {
       const step = 1 / (meta.fps || 30);
       const next = Math.max(0, Math.min(meta.duration || 0, v.currentTime + dir * step));
       v.currentTime = next;
+      if (wipeVideoRef.current) wipeVideoRef.current.currentTime = next;
       setCurrentTime(next);
     },
     [meta.fps, meta.duration]
@@ -621,7 +669,7 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [videoFile, togglePlay, setInPoint, setOutPoint, splitAtPlayhead, stepFrame]);
 
-  // Interactive Timeline Mouse Dragging
+  // Timeline Mouse Dragging
   const getTimelineSecondsFromEvent = useCallback(
     (clientX) => {
       const el = timelineRef.current;
@@ -640,6 +688,7 @@ export default function App() {
       if (dragState.type === 'playhead') {
         setCurrentTime(sec);
         if (videoRef.current) videoRef.current.currentTime = sec;
+        if (wipeVideoRef.current) wipeVideoRef.current.currentTime = sec;
       } else if (dragState.type === 'start') {
         setSegments((prev) =>
           prev.map((s) =>
@@ -667,7 +716,26 @@ export default function App() {
     };
   }, [dragState, getTimelineSecondsFromEvent, meta.duration]);
 
-  // Execute Lossless Cut/Split or NVENC / WebCodecs / WASM Compression
+  // Dragging A/B Wipe Divider
+  useEffect(() => {
+    if (!isDraggingWipe) return;
+    const onWipeMove = (e) => {
+      const el = document.getElementById('cinema-viewport-container');
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const pct = Math.max(2, Math.min(98, ((e.clientX - rect.left) / rect.width) * 100));
+      setWipePercent(pct);
+    };
+    const onWipeUp = () => setIsDraggingWipe(false);
+    window.addEventListener('mousemove', onWipeMove);
+    window.addEventListener('mouseup', onWipeUp);
+    return () => {
+      window.removeEventListener('mousemove', onWipeMove);
+      window.removeEventListener('mouseup', onWipeUp);
+    };
+  }, [isDraggingWipe]);
+
+  // Run Compression or Lossless Split
   const handleRunAction = async () => {
     if (!videoFile || isProcessing) return;
     setIsProcessing(true);
@@ -732,6 +800,7 @@ export default function App() {
           onLog: appendLog,
         });
         setOutputResult(res);
+        setPreviewMode('split-wipe'); // Default to pro split-wipe comparison!
       } else if (engineType === 'webcodecs') {
         const res = await webcodecsGpuCompress({
           file: videoFile,
@@ -758,6 +827,7 @@ export default function App() {
           onLog: appendLog,
         });
         setOutputResult(res);
+        setPreviewMode('split-wipe');
       } else {
         const res = await wasmCompressVideo({
           file: videoFile,
@@ -775,9 +845,10 @@ export default function App() {
           onLog: appendLog,
         });
         setOutputResult(res);
+        setPreviewMode('split-wipe');
       }
       setProgress(1);
-      showToast('Video processing complete!');
+      showToast('Render completed successfully');
     } catch (err) {
       console.error(err);
       setErrorMsg(err.message || 'An error occurred during video processing.');
@@ -803,41 +874,45 @@ export default function App() {
     return Math.round(((meta.size - activeOutputBytes) / meta.size) * 100);
   }, [meta.size, activeOutputBytes]);
 
-  const sizeMeterPct = useMemo(() => {
-    if (!meta.size || !activeOutputBytes) return 50;
-    return Math.max(6, Math.min(100, Math.round((activeOutputBytes / meta.size) * 100)));
+  // LED Barometer Segments (16 segments)
+  const ledLitCount = useMemo(() => {
+    if (!meta.size || !activeOutputBytes) return 8;
+    const pct = Math.max(0.05, Math.min(1, activeOutputBytes / meta.size));
+    return Math.max(1, Math.round(pct * 16));
   }, [meta.size, activeOutputBytes]);
 
   return (
-    <div className="app-shell">
-      {/* Top Navbar */}
-      <header className="topbar">
-        <div className="brand-group">
-          <div className="brand-logo">
-            <Scissors size={19} />
-          </div>
-          <div>
-            <div className="brand-title">
-              VeloxCut
-              <span
-                className="engine-status-pill"
-                title={
-                  nvencAvailable
-                    ? 'Local NVIDIA NVENC Hardware GPU (2-Pass FullRes + Spatial/Temporal AQ)'
-                    : 'WebCodecs Browser Hardware GPU Ready'
-                }
-              >
-                <span className="status-dot" />
-                {nvencAvailable ? 'NVIDIA GPU Ready' : 'Hardware GPU Ready'}
-              </span>
+    <div className="app-viewport-shell">
+      {/* Precision Topbar */}
+      <header className="studio-topbar">
+        <div className="brand-anchor" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
+          <VeloxLogo />
+          <div className="brand-name-group">
+            <div className="brand-logotype">
+              <span>VELOX</span>
+              <span className="brand-slash">//</span>
+              <span>CUT</span>
             </div>
-            <div className="brand-subtitle">
-              Fast, visually lossless video compression &amp; instant trimming
+            <div className="brand-tagline-hud">
+              <span>HARDWARE GPU ACCELERATOR</span>
+              <span style={{ color: 'var(--border-strong)' }}>•</span>
+              <span style={{ color: 'var(--flare-amber)' }}>SYSTEM 01</span>
             </div>
           </div>
         </div>
 
-        <div className="topbar-actions">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div className="telemetry-tag active-gpu" title="NVIDIA NVENC CUDA or WebCodecs hardware encoder ready">
+            <span className="pulse-led" />
+            <span>{nvencAvailable ? 'NVENC CUDA ACTIVE' : 'WEBCODECS GPU ACTIVE'}</span>
+          </div>
+
+          <div className="telemetry-tag" style={{ display: 'none' }}>
+            <span>{codec.toUpperCase()}</span>
+          </div>
+        </div>
+
+        <div className="topbar-right-controls">
           <input
             ref={fileInputRef}
             type="file"
@@ -851,74 +926,77 @@ export default function App() {
 
           <button
             type="button"
-            className="btn btn-ghost btn-sm"
+            className="tactile-btn tactile-btn-ghost tactile-btn-sm"
             onClick={() => setShowShortcutsModal((v) => !v)}
-            title="View Keyboard Shortcuts"
+            title="Keyboard HUD"
           >
-            <Keyboard size={14} />
-            Shortcuts
+            <Keyboard size={13} />
+            <span className="keycap">?</span>
           </button>
 
           <button
             type="button"
-            className="btn btn-sm"
+            className="tactile-btn tactile-btn-sm"
             onClick={handleLoadDemoVideo}
             disabled={isGeneratingDemo || isProcessing}
           >
-            <Sparkles size={13} style={{ color: '#38bdf8' }} />
-            {isGeneratingDemo ? 'Creating Demo...' : 'Try Demo Clip'}
+            <Sparkles size={13} style={{ color: 'var(--flare-amber)' }} />
+            {isGeneratingDemo ? 'Ingesting Demo...' : 'Load 1080p Demo'}
           </button>
 
           <button
             type="button"
-            className="btn btn-primary btn-sm"
+            className="tactile-btn tactile-btn-flare tactile-btn-sm"
             onClick={() => fileInputRef.current?.click()}
             disabled={isProcessing}
           >
             <Upload size={13} />
-            {videoFile ? 'Change Video' : 'Open Video'}
+            {videoFile ? 'Change Video' : 'Open Video File'}
           </button>
         </div>
       </header>
 
-      {/* Optional Keyboard Shortcuts Banner */}
+      {/* Floating Keyboard Shortcuts Drawer */}
       {showShortcutsModal && (
         <div
           style={{
             margin: '12px 24px 0',
-            padding: '10px 16px',
+            padding: '10px 18px',
             borderRadius: '10px',
-            background: 'rgba(21, 27, 40, 0.9)',
-            border: '1px solid var(--border-medium)',
+            background: '#0d0f17',
+            border: '1px solid rgba(245, 158, 11, 0.4)',
+            boxShadow: '0 10px 30px rgba(0,0,0,0.8)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
             flexWrap: 'wrap',
-            gap: '12px',
+            gap: '14px',
             fontSize: '12px',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-            <strong style={{ color: '#38bdf8' }}>Keyboard Shortcuts:</strong>
-            <span>
-              <span className="kbd-hint">Space</span> Play / Pause
+          <div style={{ display: 'flex', alignItems: 'center', gap: '18px', flexWrap: 'wrap' }}>
+            <span style={{ color: 'var(--flare-amber)', fontFamily: 'Space Grotesk', fontWeight: 700 }}>
+              KEYBOARD SHORTCUTS:
             </span>
             <span>
-              <span className="kbd-hint">I</span> Set Start Point
+              <span className="keycap">SPACE</span> Play / Pause
             </span>
             <span>
-              <span className="kbd-hint">O</span> Set End Point
+              <span className="keycap">I</span> Mark In-Point
             </span>
             <span>
-              <span className="kbd-hint">S</span> Split Clip at Playhead
+              <span className="keycap">O</span> Mark Out-Point
             </span>
             <span>
-              <span className="kbd-hint">←</span> / <span className="kbd-hint">→</span> Step 1 Frame
+              <span className="keycap">S</span> Razor Split Clip
+            </span>
+            <span>
+              <span className="keycap">←</span> / <span className="keycap">→</span> Frame Step
             </span>
           </div>
           <button
             type="button"
-            className="btn btn-ghost btn-sm"
+            className="tactile-btn tactile-btn-ghost tactile-btn-sm"
             onClick={() => setShowShortcutsModal(false)}
           >
             <X size={14} />
@@ -926,56 +1004,83 @@ export default function App() {
         </div>
       )}
 
-      {/* Main Workspace */}
-      <main className="workspace-grid">
-        {/* Left Column: Video Stage + Interactive Timeline */}
-        <div className="left-stage">
-          <div className="stage-card">
-            {/* Stage Header */}
-            <div className="stage-header">
+      {/* Main Studio Workbench */}
+      <main className="studio-workbench">
+        {/* Left Column: Cinema Monitor & Timeline */}
+        <div className="studio-main-stage">
+          <div className="cinema-monitor-card">
+            {/* Monitor Top Strip */}
+            <div className="monitor-top-strip">
               {videoFile ? (
-                <div className="file-info-bar">
-                  <span className="file-title-pill" title={meta.name}>
-                    <Film size={15} style={{ color: '#38bdf8', flexShrink: 0 }} />
+                <div className="file-telemetry-hud">
+                  <span className="file-name-hud" title={meta.name}>
                     {meta.name}
                   </span>
-                  <div className="meta-badges">
-                    <span className="meta-tag">
-                      <strong>{formatBytes(meta.size)}</strong>
-                    </span>
-                    <span className="meta-tag">
-                      {meta.width}×{meta.height}
-                    </span>
-                    <span className="meta-tag">{formatTimecode(meta.duration, false)}</span>
-                  </div>
+                  <span className="hud-pill">
+                    RAW: <strong>{formatBytes(meta.size)}</strong>
+                  </span>
+                  <span className="hud-pill">
+                    {meta.width}×{meta.height} • {meta.fps} FPS
+                  </span>
+                  <span className="hud-pill" style={{ color: 'var(--flare-amber)' }}>
+                    {formatTimecode(meta.duration, false)}
+                  </span>
                 </div>
               ) : (
-                <span style={{ color: 'var(--text-secondary)', fontSize: '12.5px' }}>
-                  100% local GPU video processing — your files never leave your device
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '12px', color: 'var(--text-sub)' }}>
+                  <Activity size={14} style={{ color: 'var(--flare-amber)' }} />
+                  <span>STANDBY // AWAITING MEDIA INGESTION</span>
+                </div>
               )}
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {/* View Modes (Original vs Output vs Split-Wipe) */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 {outputResult?.primary && (
-                  <div className="compare-toggle">
+                  <div style={{ display: 'flex', background: '#090b10', padding: 2, borderRadius: 6, border: '1px solid var(--border-subtle)' }}>
                     <button
                       type="button"
-                      className={`compare-tab ${
-                        previewMode === 'original' ? 'active-orig' : ''
+                      className={`tactile-btn tactile-btn-ghost tactile-btn-sm ${
+                        previewMode === 'split-wipe' ? 'active-compress' : ''
                       }`}
-                      onClick={() => handleSwitchPreviewMode('original')}
+                      style={{
+                        padding: '4px 9px',
+                        fontSize: '11px',
+                        color: previewMode === 'split-wipe' ? 'var(--flare-amber)' : 'var(--text-sub)',
+                        background: previewMode === 'split-wipe' ? 'rgba(245,158,11,0.14)' : 'transparent',
+                      }}
+                      onClick={() => handleSwitchPreviewMode('split-wipe')}
                     >
-                      Original ({formatBytes(meta.size)})
+                      <Sliders size={12} /> A/B Wipe
                     </button>
                     <button
                       type="button"
-                      className={`compare-tab ${
-                        previewMode === 'output' ? 'active-out' : ''
+                      className={`tactile-btn tactile-btn-ghost tactile-btn-sm ${
+                        previewMode === 'original' ? 'active-compress' : ''
                       }`}
+                      style={{
+                        padding: '4px 9px',
+                        fontSize: '11px',
+                        color: previewMode === 'original' ? '#ffffff' : 'var(--text-sub)',
+                        background: previewMode === 'original' ? 'var(--bg-surface-2)' : 'transparent',
+                      }}
+                      onClick={() => handleSwitchPreviewMode('original')}
+                    >
+                      Source ({formatBytes(meta.size)})
+                    </button>
+                    <button
+                      type="button"
+                      className={`tactile-btn tactile-btn-ghost tactile-btn-sm ${
+                        previewMode === 'output' ? 'active-lossless' : ''
+                      }`}
+                      style={{
+                        padding: '4px 9px',
+                        fontSize: '11px',
+                        color: previewMode === 'output' ? 'var(--phosphor-green-bright)' : 'var(--text-sub)',
+                        background: previewMode === 'output' ? 'rgba(16,185,129,0.14)' : 'transparent',
+                      }}
                       onClick={() => handleSwitchPreviewMode('output')}
                     >
-                      <Eye size={13} />
-                      Result ({formatBytes(outputResult.primary.size)})
+                      <Eye size={12} /> Result ({formatBytes(outputResult.primary.size)})
                     </button>
                   </div>
                 )}
@@ -983,8 +1088,8 @@ export default function App() {
                 {videoFile && (
                   <button
                     type="button"
-                    className="btn btn-ghost btn-icon"
-                    title="Close video"
+                    className="tactile-btn tactile-btn-ghost tactile-btn-icon"
+                    title="Close Video"
                     onClick={handleCloseVideo}
                     disabled={isProcessing}
                   >
@@ -994,9 +1099,10 @@ export default function App() {
               </div>
             </div>
 
-            {/* Video Viewport or Dropzone */}
+            {/* Viewport Canvas with Crosshairs */}
             <div
-              className="video-viewport"
+              id="cinema-viewport-container"
+              className="cinema-viewport"
               onDragOver={(e) => {
                 e.preventDefault();
                 setIsDragOver(true);
@@ -1010,87 +1116,94 @@ export default function App() {
                 }
               }}
             >
+              {/* Digital Cinema Reticles */}
+              <div className="crosshair-reticle crosshair-tl" />
+              <div className="crosshair-reticle crosshair-tr" />
+              <div className="crosshair-reticle crosshair-bl" />
+              <div className="crosshair-reticle crosshair-br" />
+
               {!videoFile ? (
                 <div
-                  className={`dropzone-empty ${isDragOver ? 'drag-over' : ''}`}
+                  className={`ingest-dock ${isDragOver ? 'drag-active' : ''}`}
                   onClick={() => fileInputRef.current?.click()}
                 >
-                  <div className="dropzone-icon-wrap">
-                    <Upload size={28} />
+                  <div className="aperture-radar">
+                    <Film size={32} style={{ color: 'var(--flare-amber)' }} />
                   </div>
-                  <h2 className="dropzone-title">
-                    Drop a video here to compress or trim
+                  <h2 className="ingest-dock-title">
+                    FEED SOURCE MATERIAL TO ACCELERATE
                   </h2>
-                  <p className="dropzone-desc">
-                    Shrink file size by <strong>50%–75%</strong> with visually lossless GPU encoding,
-                    or split clips in <strong>0.2 seconds</strong> without re-encoding.
+                  <p className="ingest-dock-desc">
+                    Drop any MP4, MKV, MOV, or WebM video. Shrink file sizes by <strong>50%–75%</strong> with
+                    psycho-visual GPU encoding, or trim &amp; split clips in <strong>0.2 seconds</strong> with zero re-encoding.
                   </p>
-                  <div
-                    style={{
-                      display: 'flex',
-                      gap: '10px',
-                      flexWrap: 'wrap',
-                      justifyContent: 'center',
-                    }}
-                  >
+                  <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
                     <button
                       type="button"
-                      className="btn btn-primary"
-                      style={{ padding: '10px 18px', fontSize: '13.5px' }}
+                      className="tactile-btn tactile-btn-flare"
+                      style={{ padding: '10px 20px', fontSize: '13px' }}
                       onClick={(e) => {
                         e.stopPropagation();
                         fileInputRef.current?.click();
                       }}
                     >
-                      <Upload size={15} /> Choose Video File
+                      <Upload size={14} /> Ingest Video File
                     </button>
                     <button
                       type="button"
-                      className="btn"
-                      style={{ padding: '10px 16px', fontSize: '13.5px' }}
+                      className="tactile-btn"
+                      style={{ padding: '10px 18px', fontSize: '13px' }}
                       onClick={(e) => {
                         e.stopPropagation();
                         handleLoadDemoVideo();
                       }}
                     >
-                      <Sparkles size={15} style={{ color: '#38bdf8' }} /> Load 4-Scene Demo
+                      <Sparkles size={14} style={{ color: 'var(--flare-amber)' }} /> Try 1080p Clip
                     </button>
                   </div>
 
-                  <div className="dropzone-features">
-                    <span className="feature-chip">
-                      <ShieldCheck size={14} style={{ color: '#34d399' }} />
-                      99% Original Sharpness
+                  <div className="dock-features-strip">
+                    <span className="dock-chip">
+                      <Cpu size={12} style={{ color: 'var(--phosphor-green-bright)' }} />
+                      NVIDIA NVENC 2-PASS LOOKAHEAD
                     </span>
-                    <span className="feature-chip">
-                      <Gauge size={14} style={{ color: '#38bdf8' }} />
-                      Exact Target MB Mode
+                    <span className="dock-chip">
+                      <Scissors size={12} style={{ color: 'var(--flare-amber)' }} />
+                      0.2s STREAM-COPY SPLITTER
                     </span>
-                    <span className="feature-chip">
-                      <Scissors size={14} style={{ color: '#a78bfa' }} />
-                      Instant Lossless Cut
+                    <span className="dock-chip">
+                      <ShieldCheck size={12} style={{ color: 'var(--cyber-cyan-bright)' }} />
+                      100% PRIVATE &amp; AIR-GAPPED
                     </span>
                   </div>
                 </div>
               ) : (
                 <>
-                  {/* Floating badge showing whether user is viewing Original or Compressed Output */}
+                  {/* Floating HUD status */}
                   <div
-                    className={`viewport-badge-overlay ${
-                      previewMode === 'output' ? 'viewport-badge-out' : 'viewport-badge-orig'
+                    className={`viewport-hud-overlay ${
+                      previewMode === 'output' ? 'viewport-hud-output' : 'viewport-hud-original'
                     }`}
                   >
-                    {previewMode === 'output' && outputResult?.primary ? (
+                    {previewMode === 'split-wipe' ? (
                       <>
-                        <CheckCircle2 size={13} />
-                        Compressed Output · {formatBytes(outputResult.primary.size)}
-                        {savingsPct > 0 ? ` (-${savingsPct}%)` : ''}
+                        <Sliders size={12} style={{ color: 'var(--flare-amber)' }} />
+                        <span>A/B WIPE // LEFT: SOURCE • RIGHT: RENDER</span>
+                      </>
+                    ) : previewMode === 'output' && outputResult?.primary ? (
+                      <>
+                        <CheckCircle2 size={12} />
+                        <span>RENDERED // {formatBytes(outputResult.primary.size)} (-{savingsPct}%)</span>
                       </>
                     ) : (
-                      <>Original Source · {formatBytes(meta.size)}</>
+                      <>
+                        <span style={{ color: 'var(--flare-amber)' }}>●</span>
+                        <span>SOURCE FOOTAGE // {formatBytes(meta.size)}</span>
+                      </>
                     )}
                   </div>
 
+                  {/* Primary Video Element */}
                   <video
                     ref={videoRef}
                     src={
@@ -1119,123 +1232,166 @@ export default function App() {
                       ) {
                         e.currentTarget.currentTime = activeSegment.start;
                       }
+                      if (wipeVideoRef.current && Math.abs(wipeVideoRef.current.currentTime - t) > 0.08) {
+                        wipeVideoRef.current.currentTime = t;
+                      }
                     }}
                     onPlay={() => setIsPlaying(true)}
                     onPause={() => setIsPlaying(false)}
                     onClick={togglePlay}
                   />
 
-                  <div className={`video-BigPlayOverlay ${!isPlaying ? 'is-paused' : ''}`}>
-                    <div className="big-play-circle">
-                      <Play size={24} style={{ marginLeft: 3 }} />
+                  {/* Split Wipe Comparison Overlay */}
+                  {previewMode === 'split-wipe' && outputResult?.primary && (
+                    <div className="split-wipe-wrapper">
+                      <div
+                        className="split-wipe-video-clip"
+                        style={{
+                          clipPath: `polygon(${wipePercent}% 0, 100% 0, 100% 100%, ${wipePercent}% 100%)`,
+                        }}
+                      >
+                        <video
+                          ref={wipeVideoRef}
+                          src={outputResult.primary.url}
+                          muted
+                          playsInline
+                        />
+                      </div>
+
+                      {/* Interactive Draggable Wipe Divider */}
+                      <div
+                        className="split-wipe-divider"
+                        style={{ left: `${wipePercent}%` }}
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                          setIsDraggingWipe(true);
+                        }}
+                      >
+                        <div className="split-wipe-handle">
+                          <span>⇔</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Center Play Overlay */}
+                  <div className={`cinema-center-indicator ${!isPlaying ? 'is-paused' : ''}`}>
+                    <div className="center-play-reticle">
+                      <Play size={26} style={{ marginLeft: 3, color: 'var(--flare-amber)' }} />
                     </div>
                   </div>
                 </>
               )}
             </div>
 
-            {/* Player Transport & Quick Trim Bar */}
+            {/* Sound & Transport Deck */}
             {videoFile && (
-              <div className="transport-bar">
-                <div className="transport-group">
+              <div className="sound-transport-deck">
+                <div className="transport-cluster">
                   <button
                     type="button"
-                    className="btn btn-icon"
+                    className="tactile-btn tactile-btn-icon"
                     onClick={() => stepFrame(-1)}
                     title="Previous Frame (← or ,)"
                   >
-                    <SkipBack size={14} />
+                    <SkipBack size={13} />
                   </button>
                   <button
                     type="button"
-                    className="btn btn-primary"
+                    className="tactile-btn tactile-btn-flare"
                     onClick={togglePlay}
                     title="Play / Pause (Space)"
                   >
                     {isPlaying ? <Pause size={14} /> : <Play size={14} />}
-                    {isPlaying ? 'Pause' : 'Play'}
+                    <span>{isPlaying ? 'PAUSE' : 'PLAY'}</span>
                   </button>
                   <button
                     type="button"
-                    className="btn btn-icon"
+                    className="tactile-btn tactile-btn-icon"
                     onClick={() => stepFrame(1)}
                     title="Next Frame (→ or .)"
                   >
-                    <SkipForward size={14} />
+                    <SkipForward size={13} />
                   </button>
 
                   <button
                     type="button"
-                    className="btn btn-icon"
+                    className="tactile-btn tactile-btn-icon"
                     onClick={toggleMute}
                     title={isMuted ? 'Unmute' : 'Mute'}
                   >
                     {isMuted ? <VolumeX size={14} /> : <Volume2 size={14} />}
                   </button>
 
+                  {/* Animated VU Meter */}
+                  <div className="audio-vu-meter" title="Audio Stream Level">
+                    <div className={`vu-bar ${isPlaying && !isMuted ? 'active' : ''}`} style={{ height: isPlaying && !isMuted ? '12px' : '4px' }} />
+                    <div className={`vu-bar ${isPlaying && !isMuted ? 'active' : ''}`} style={{ height: isPlaying && !isMuted ? '16px' : '6px' }} />
+                    <div className={`vu-bar ${isPlaying && !isMuted ? 'active' : ''}`} style={{ height: isPlaying && !isMuted ? '10px' : '3px' }} />
+                    <div className={`vu-bar ${isPlaying && !isMuted ? 'active' : ''}`} style={{ height: isPlaying && !isMuted ? '14px' : '5px' }} />
+                  </div>
+
                   <select
-                    className="speed-select"
+                    className="deck-select"
                     value={playbackRate}
                     onChange={(e) => handleSpeedChange(e.target.value)}
-                    title="Playback Speed"
+                    title="Playback Rate"
                   >
                     <option value="0.5">0.5×</option>
-                    <option value="1">1×</option>
+                    <option value="1">1.0×</option>
                     <option value="1.5">1.5×</option>
-                    <option value="2">2×</option>
+                    <option value="2">2.0×</option>
                   </select>
 
-                  <div className="timecode-box">
+                  <div className="timecode-lcd-readout">
                     <span>{formatTimecode(currentTime)}</span>
-                    <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>
-                      / {formatTimecode(meta.duration)}
-                    </span>
+                    <span className="dim-denom">/ {formatTimecode(meta.duration)}</span>
                   </div>
                 </div>
 
-                <div className="transport-group">
+                <div className="transport-cluster">
                   <button
                     type="button"
-                    className="btn btn-sm"
+                    className="tactile-btn tactile-btn-sm"
                     onClick={setInPoint}
-                    title="Set start of clip to current playhead (Shortcut: I)"
+                    title="Set In-Point (Shortcut: I)"
                   >
-                    [ Start <span className="kbd-hint">I</span>
+                    [ IN <span className="keycap">I</span>
                   </button>
                   <button
                     type="button"
-                    className="btn btn-sm"
+                    className="tactile-btn tactile-btn-sm"
                     onClick={setOutPoint}
-                    title="Set end of clip to current playhead (Shortcut: O)"
+                    title="Set Out-Point (Shortcut: O)"
                   >
-                    End ] <span className="kbd-hint">O</span>
+                    OUT ] <span className="keycap">O</span>
                   </button>
                   <button
                     type="button"
-                    className="btn btn-sm"
+                    className="tactile-btn tactile-btn-sm"
                     onClick={splitAtPlayhead}
-                    title="Split clip at current playhead (Shortcut: S)"
+                    title="Razor split clip at playhead (Shortcut: S)"
                   >
-                    <Scissors size={13} style={{ color: '#10b981' }} />
-                    Split <span className="kbd-hint">S</span>
+                    <Scissors size={12} style={{ color: 'var(--flare-amber)' }} />
+                    SPLIT <span className="keycap">S</span>
                   </button>
                   <button
                     type="button"
-                    className="btn btn-sm"
+                    className="tactile-btn tactile-btn-sm"
                     onClick={addNewSegment}
-                    title="Add another segment"
+                    title="Add new clip region"
                   >
-                    <Plus size={13} /> Clip
+                    <Plus size={12} /> CLIP
                   </button>
                   {isTrimmedOrMulti && (
                     <button
                       type="button"
-                      className="btn btn-ghost btn-sm"
+                      className="tactile-btn tactile-btn-ghost tactile-btn-sm"
                       onClick={resetSegments}
-                      title="Reset trim to full video"
+                      title="Reset timeline boundaries"
                     >
-                      <RotateCcw size={13} />
-                      Reset
+                      <RotateCcw size={12} />
+                      RESET
                     </button>
                   )}
                 </div>
@@ -1243,50 +1399,37 @@ export default function App() {
             )}
           </div>
 
-          {/* Interactive Timeline Card */}
+          {/* Precision Timeline Deck */}
           {videoFile && (
-            <div className="timeline-card">
-              <div className="timeline-top">
+            <div className="timeline-deck-card">
+              <div className="timeline-deck-header">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  <Layers size={15} style={{ color: '#38bdf8' }} />
-                  <span style={{ fontWeight: 700, fontSize: '13px' }}>Trim &amp; Cut Timeline</span>
-                  <span style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>
-                    Selected: <strong style={{ color: '#f8fafc' }}>{formatTimecode(selectedDuration)}</strong>
-                    {isTrimmedOrMulti && ` of ${formatTimecode(meta.duration)}`}
+                  <Layers size={14} style={{ color: 'var(--flare-amber)' }} />
+                  <span style={{ fontFamily: 'Space Grotesk', fontWeight: 700, fontSize: '13px' }}>
+                    TIMELINE TRIM &amp; MULTI-CLIP SEQUENCER
+                  </span>
+                  <span style={{ fontFamily: 'JetBrains Mono', color: 'var(--text-sub)', fontSize: '11.5px' }}>
+                    ACTIVE DURATION: <strong style={{ color: 'var(--flare-amber)' }}>{formatTimecode(selectedDuration)}</strong>
+                    {isTrimmedOrMulti && ` / ${formatTimecode(meta.duration)}`}
                   </span>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <button
-                    type="button"
-                    className={`btn btn-sm ${loopSegment ? 'selected-emerald' : 'btn-ghost'}`}
-                    style={{
-                      padding: '4px 9px',
-                      fontSize: '11.5px',
-                      borderColor: loopSegment ? 'var(--accent-emerald)' : 'transparent',
-                    }}
-                    onClick={() => setLoopSegment((v) => !v)}
-                    title="Loop playback within active segment"
-                  >
-                    <Repeat size={12} />
-                    Loop Selection
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  className={`tactile-btn tactile-btn-sm ${loopSegment ? 'tactile-btn-emerald' : 'tactile-btn-ghost'}`}
+                  style={{ padding: '3px 8px', fontSize: '11px' }}
+                  onClick={() => setLoopSegment((v) => !v)}
+                  title="Loop playback between In & Out marks"
+                >
+                  <Repeat size={12} />
+                  LOOP SELECTION
+                </button>
               </div>
 
-              {/* Time Ruler */}
-              <div className="timeline-ruler">
-                <span>00:00</span>
-                <span>{formatTimecode(meta.duration * 0.25, false)}</span>
-                <span>{formatTimecode(meta.duration * 0.5, false)}</span>
-                <span>{formatTimecode(meta.duration * 0.75, false)}</span>
-                <span>{formatTimecode(meta.duration, false)}</span>
-              </div>
-
-              {/* Track */}
+              {/* Filmstrip & Scrub Bounds */}
               <div
                 ref={timelineRef}
-                className="timeline-track-wrapper"
+                className="timeline-track-bounds"
                 onMouseMove={(e) => {
                   const sec = getTimelineSecondsFromEvent(e.clientX);
                   setHoverTime(sec);
@@ -1296,26 +1439,27 @@ export default function App() {
                   const sec = getTimelineSecondsFromEvent(e.clientX);
                   setCurrentTime(sec);
                   if (videoRef.current) videoRef.current.currentTime = sec;
+                  if (wipeVideoRef.current) wipeVideoRef.current.currentTime = sec;
                   setDragState({ type: 'playhead' });
                 }}
               >
                 {filmstrip.length > 0 && (
-                  <div className="filmstrip-row">
+                  <div className="filmstrip-scroller">
                     {filmstrip.map((src, idx) => (
-                      <img key={idx} src={src} alt="" className="filmstrip-thumb" />
+                      <img key={idx} src={src} alt="" className="filmstrip-frame" />
                     ))}
                   </div>
                 )}
 
-                {/* Hover Scrub Guide & Timecode Tooltip */}
+                {/* Hover Scrubber Line & Floating Timecode Badge */}
                 {hoverTime !== null && meta.duration > 0 && (
                   <>
                     <div
-                      className="timeline-hover-line"
+                      className="timeline-scrub-guide"
                       style={{ left: `${(hoverTime / meta.duration) * 100}%` }}
                     />
                     <div
-                      className="timeline-hover-tooltip"
+                      className="timeline-hover-badge"
                       style={{
                         left: `${Math.max(4, Math.min(96, (hoverTime / meta.duration) * 100))}%`,
                       }}
@@ -1325,6 +1469,7 @@ export default function App() {
                   </>
                 )}
 
+                {/* Clamped Segment Boundaries */}
                 {segments.map((seg, index) => {
                   const leftPct = meta.duration ? (seg.start / meta.duration) * 100 : 0;
                   const widthPct = meta.duration
@@ -1335,7 +1480,7 @@ export default function App() {
                   return (
                     <div
                       key={seg.id}
-                      className={`segment-block ${isActive ? 'active' : ''}`}
+                      className={`clip-boundary-block ${isActive ? 'active' : ''}`}
                       style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
                       onMouseDown={(e) => {
                         e.stopPropagation();
@@ -1343,21 +1488,20 @@ export default function App() {
                       }}
                     >
                       <div
-                        className="segment-handle"
-                        title="Drag Start Point"
+                        className="clip-drag-handle"
+                        title="Drag In-Point"
                         onMouseDown={(e) => {
                           e.stopPropagation();
                           setActiveSegId(seg.id);
                           setDragState({ type: 'start', segId: seg.id });
                         }}
                       />
-                      <span className="segment-label-inside">
-                        Clip #{index + 1} · {formatTimecode(seg.start, false)} –{' '}
-                        {formatTimecode(seg.end, false)} ({(seg.end - seg.start).toFixed(1)}s)
+                      <span className="clip-label-tag">
+                        #{index + 1} ({formatTimecode(seg.start, false)} → {formatTimecode(seg.end, false)})
                       </span>
                       <div
-                        className="segment-handle"
-                        title="Drag End Point"
+                        className="clip-drag-handle"
+                        title="Drag Out-Point"
                         onMouseDown={(e) => {
                           e.stopPropagation();
                           setActiveSegId(seg.id);
@@ -1368,25 +1512,26 @@ export default function App() {
                   );
                 })}
 
+                {/* Laser Playhead Needle */}
                 <div
-                  className="playhead-line"
+                  className="needle-playhead"
                   style={{
                     left: `${meta.duration ? (currentTime / meta.duration) * 100 : 0}%`,
                   }}
                 >
-                  <div className="playhead-cap" />
+                  <div className="needle-diamond" />
                 </div>
               </div>
 
-              {/* Segment Chips List */}
-              <div className="segments-pill-list">
-                <div className="segments-chips-wrap">
+              {/* Clip Pods Strip */}
+              <div className="timeline-clip-pills-row">
+                <div className="clip-pills-wrap">
                   {segments.map((seg, idx) => {
                     const isActive = seg.id === activeSegId;
                     return (
                       <div
                         key={seg.id}
-                        className={`segment-chip ${isActive ? 'active' : ''}`}
+                        className={`clip-pod ${isActive ? 'active' : ''}`}
                         onClick={() => {
                           setActiveSegId(seg.id);
                           if (videoRef.current) {
@@ -1395,30 +1540,23 @@ export default function App() {
                           }
                         }}
                       >
-                        <strong style={{ color: isActive ? '#34d399' : 'var(--text-primary)' }}>
-                          Clip #{idx + 1}
+                        <strong style={{ color: isActive ? 'var(--flare-amber)' : 'var(--text-main)', fontFamily: 'Space Grotesk' }}>
+                          CLIP #{idx + 1}
                         </strong>
-                        <span
-                          style={{
-                            fontFamily: 'JetBrains Mono, monospace',
-                            fontSize: '11.5px',
-                            color: 'var(--text-secondary)',
-                          }}
-                        >
-                          {formatTimecode(seg.start, false)} → {formatTimecode(seg.end, false)} (
-                          {(seg.end - seg.start).toFixed(1)}s)
+                        <span style={{ fontFamily: 'JetBrains Mono', fontSize: '11px', color: 'var(--text-sub)' }}>
+                          {formatTimecode(seg.start, false)} – {formatTimecode(seg.end, false)} ({(seg.end - seg.start).toFixed(1)}s)
                         </span>
                         {segments.length > 1 && (
                           <button
                             type="button"
-                            className="segment-chip-remove"
+                            className="clip-remove-x"
                             title="Remove this clip"
                             onClick={(e) => {
                               e.stopPropagation();
                               removeSegment(seg.id);
                             }}
                           >
-                            <Trash2 size={13} />
+                            <Trash2 size={12} />
                           </button>
                         )}
                       </div>
@@ -1426,34 +1564,34 @@ export default function App() {
                   })}
                 </div>
 
-                <span style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
-                  Drag green handles to trim, or press <span className="kbd-hint">S</span> to split
+                <span style={{ fontFamily: 'JetBrains Mono', fontSize: '11px', color: 'var(--text-dim)' }}>
+                  DRAG HANDLES TO TRIM // <span className="keycap">S</span> TO RAZOR SPLIT
                 </span>
               </div>
             </div>
           )}
         </div>
 
-        {/* Right Sidebar: Clean, Goal-Oriented Controls */}
-        <aside className="right-sidebar">
-          <div className="sidebar-card">
-            {/* Workflow Mode Tabs */}
-            <div className="mode-tabs">
+        {/* Right Column: Tactical Control Bay */}
+        <aside className="tactical-control-bay">
+          <div className="control-module-card">
+            {/* Master Pipeline Mode Switch */}
+            <div className="master-pipeline-switch">
               <button
                 type="button"
-                className={`mode-tab ${workflowMode === 'compress' ? 'active-compress' : ''}`}
+                className={`pipeline-switch-btn ${workflowMode === 'compress' ? 'active-compress' : ''}`}
                 onClick={() => setWorkflowMode('compress')}
               >
-                <Zap size={14} />
-                Compress &amp; Shrink
+                <Zap size={13} />
+                ACCELERATED COMPRESS
               </button>
               <button
                 type="button"
-                className={`mode-tab ${workflowMode === 'lossless' ? 'active-lossless' : ''}`}
+                className={`pipeline-switch-btn ${workflowMode === 'lossless' ? 'active-lossless' : ''}`}
                 onClick={() => setWorkflowMode('lossless')}
               >
-                <Scissors size={14} />
-                Lossless Cut / Split
+                <Scissors size={13} />
+                STREAM-COPY CUT
               </button>
             </div>
 
@@ -1461,190 +1599,178 @@ export default function App() {
               <>
                 <div
                   style={{
-                    padding: '11px 13px',
-                    borderRadius: 10,
+                    padding: '12px 14px',
+                    borderRadius: 8,
                     background: 'rgba(16, 185, 129, 0.08)',
-                    border: '1px solid rgba(16, 185, 129, 0.25)',
-                    fontSize: '12.5px',
+                    border: '1px solid rgba(16, 185, 129, 0.3)',
+                    fontSize: '12px',
+                    lineHeight: 1.5,
                     color: '#a7f3d0',
-                    lineHeight: 1.45,
                   }}
                 >
-                  <strong>Instant Lossless Stream Copy</strong> — Trims or splits your video in{' '}
-                  <strong>~0.2 seconds</strong> without re-encoding. 100% original video quality.
+                  <strong style={{ fontFamily: 'Space Grotesk' }}>ZERO RE-ENCODING STREAM COPY:</strong> Trims and splits
+                  footage in <strong>~0.2 seconds</strong> with bit-for-bit identical original quality, just like LosslessCut.
                 </div>
 
-                <div className="control-section">
-                  <div className="control-label">
-                    <span>When Exporting Multiple Clips</span>
-                    <span className="val">{segments.length} clip(s)</span>
+                <div className="deck-section">
+                  <div className="deck-section-title">
+                    <span>MULTI-CLIP EXPORT MATRIX</span>
+                    <span className="val">{segments.length} CLIPS</span>
                   </div>
-                  <div className="preset-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
+                  <div className="matrix-selector-row" style={{ gridTemplateColumns: '1fr 1fr' }}>
                     <button
                       type="button"
-                      className={`preset-btn ${!mergeSegments ? 'selected-emerald' : ''}`}
+                      className={`deck-pod-btn ${!mergeSegments ? 'selected-emerald' : ''}`}
                       onClick={() => setMergeSegments(false)}
                     >
-                      Save Separate Files
+                      SEPARATE FILES
                     </button>
                     <button
                       type="button"
-                      className={`preset-btn ${mergeSegments ? 'selected-emerald' : ''}`}
+                      className={`deck-pod-btn ${mergeSegments ? 'selected-emerald' : ''}`}
                       onClick={() => setMergeSegments(true)}
                     >
-                      Merge Into One Video
+                      MERGE KEPT CLIPS
                     </button>
                   </div>
                 </div>
 
-                <div className="control-section">
-                  <div className="control-label">
-                    <span>Audio Track</span>
+                <div className="deck-section">
+                  <div className="deck-section-title">
+                    <span>AUDIO PASSTHROUGH</span>
                   </div>
-                  <div className="preset-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
+                  <div className="matrix-selector-row" style={{ gridTemplateColumns: '1fr 1fr' }}>
                     <button
                       type="button"
-                      className={`preset-btn ${!losslessStripAudio ? 'selected-emerald' : ''}`}
+                      className={`deck-pod-btn ${!losslessStripAudio ? 'selected-emerald' : ''}`}
                       onClick={() => setLosslessStripAudio(false)}
                     >
                       <Volume2 size={12} style={{ marginRight: 5, verticalAlign: 'middle' }} />
-                      Keep Original Audio
+                      ORIGINAL AUDIO
                     </button>
                     <button
                       type="button"
-                      className={`preset-btn ${losslessStripAudio ? 'selected-emerald' : ''}`}
+                      className={`deck-pod-btn ${losslessStripAudio ? 'selected-emerald' : ''}`}
                       onClick={() => setLosslessStripAudio(true)}
                     >
                       <VolumeX size={12} style={{ marginRight: 5, verticalAlign: 'middle' }} />
-                      Mute Audio
+                      MUTE AUDIO
                     </button>
                   </div>
                 </div>
               </>
             ) : (
               <>
-                {/* 1. One-Click Quick Presets */}
-                <div className="control-section">
-                  <div className="control-label">
-                    <span>1-Click Quick Presets</span>
+                {/* Quick Mission Matrix (1-Click Presets) */}
+                <div className="deck-section">
+                  <div className="deck-section-title">
+                    <span>MISSION PRESET MATRIX</span>
                     <span className="val" style={{ color: qualityHealth.color }}>
                       {qualityHealth.label}
                     </span>
                   </div>
-                  <div className="quick-presets-grid">
+                  <div className="mission-matrix-grid">
                     <button
                       type="button"
-                      className={`quick-preset-card ${
-                        activeQuickPreset === 'smart-lossless' ? 'active' : ''
-                      }`}
+                      className={`matrix-card ${activeQuickPreset === 'smart-lossless' ? 'active' : ''}`}
                       onClick={() => applyQuickPreset('smart-lossless')}
                     >
-                      <span className="quick-preset-title">
-                        <Sparkles size={12} style={{ color: '#34d399' }} />
-                        Best Quality (Auto)
+                      <span className="matrix-title">
+                        <Sparkles size={11} style={{ color: 'var(--flare-amber)' }} />
+                        ZERO LOSS AUTO
                       </span>
-                      <span className="quick-preset-sub">99% sharpness · ~55% smaller</span>
+                      <span className="matrix-sub">99% SHARP • -55% SIZE</span>
                     </button>
 
                     <button
                       type="button"
-                      className={`quick-preset-card ${
-                        activeQuickPreset === 'discord-10' ? 'active' : ''
-                      }`}
+                      className={`matrix-card ${activeQuickPreset === 'discord-10' ? 'active' : ''}`}
                       onClick={() => applyQuickPreset('discord-10')}
                     >
-                      <span className="quick-preset-title">
-                        <Gauge size={12} style={{ color: '#38bdf8' }} />
-                        Fit Under 10 MB
+                      <span className="matrix-title">
+                        <Gauge size={11} style={{ color: 'var(--cyber-cyan)' }} />
+                        DISCORD 10 MB
                       </span>
-                      <span className="quick-preset-sub">Discord &amp; email ready</span>
+                      <span className="matrix-sub">CLAMPED BITRATE FIT</span>
                     </button>
 
                     <button
                       type="button"
-                      className={`quick-preset-card ${
-                        activeQuickPreset === 'share-25' ? 'active' : ''
-                      }`}
+                      className={`matrix-card ${activeQuickPreset === 'share-25' ? 'active' : ''}`}
                       onClick={() => applyQuickPreset('share-25')}
                     >
-                      <span className="quick-preset-title">
-                        <Gauge size={12} style={{ color: '#818cf8' }} />
-                        Fit Under 25 MB
+                      <span className="matrix-title">
+                        <Gauge size={11} style={{ color: '#818cf8' }} />
+                        WEB STREAM 25M
                       </span>
-                      <span className="quick-preset-sub">High-clarity web upload</span>
+                      <span className="matrix-sub">CRISP 1080P SHARE</span>
                     </button>
 
                     <button
                       type="button"
-                      className={`quick-preset-card ${
-                        activeQuickPreset === 'compact-720' ? 'active' : ''
-                      }`}
+                      className={`matrix-card ${activeQuickPreset === 'compact-720' ? 'active' : ''}`}
                       onClick={() => applyQuickPreset('compact-720')}
                     >
-                      <span className="quick-preset-title">
-                        <Zap size={12} style={{ color: '#fbbf24' }} />
-                        Compact 720p
+                      <span className="matrix-title">
+                        <Zap size={11} style={{ color: '#fbbf24' }} />
+                        ULTRA-SLIM 720P
                       </span>
-                      <span className="quick-preset-sub">Smallest size for chat</span>
+                      <span className="matrix-sub">LIGHTWEIGHT CHAT</span>
                     </button>
                   </div>
                 </div>
 
-                <div className="section-divider" />
-
-                {/* 2. Compression Method: By Quality vs By Target Size */}
-                <div className="control-section">
-                  <div className="control-label">
-                    <span>Compression Mode</span>
+                {/* Rate Control: Visual Quality vs Exact MB */}
+                <div className="deck-section">
+                  <div className="deck-section-title">
+                    <span>RATE CONTROL PIPELINE</span>
                   </div>
-                  <div className="preset-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
+                  <div className="matrix-selector-row" style={{ gridTemplateColumns: '1fr 1fr' }}>
                     <button
                       type="button"
-                      className={`preset-btn ${
-                        rateControlMode === 'crf' ? 'selected-emerald' : ''
-                      }`}
+                      className={`deck-pod-btn ${rateControlMode === 'crf' ? 'selected-amber' : ''}`}
                       onClick={() => setRateControlMode('crf')}
                     >
                       <ShieldCheck size={12} style={{ marginRight: 5, verticalAlign: 'middle' }} />
-                      By Visual Quality
+                      VISUAL QUALITY CQ
                     </button>
                     <button
                       type="button"
-                      className={`preset-btn ${rateControlMode === 'size' ? 'selected' : ''}`}
+                      className={`deck-pod-btn ${rateControlMode === 'size' ? 'selected-cyan' : ''}`}
                       onClick={() => setRateControlMode('size')}
                     >
                       <Gauge size={12} style={{ marginRight: 5, verticalAlign: 'middle' }} />
-                      Exact File Size (MB)
+                      TARGET LIMIT (MB)
                     </button>
                   </div>
                 </div>
 
                 {rateControlMode === 'crf' ? (
-                  <div className="control-section">
-                    <div className="control-label">
-                      <span>Quality Level</span>
+                  <div className="deck-section">
+                    <div className="deck-section-title">
+                      <span>PERCEPTUAL FIDELITY (CQ)</span>
                       <span className="val">
+                        CQ {crf} //{' '}
                         {crf <= 20
-                          ? 'Visually Lossless'
+                          ? 'VISUALLY LOSSLESS'
                           : crf <= 23
-                          ? 'High Quality'
+                          ? 'STUDIO HQ'
                           : crf <= 26
-                          ? 'Balanced'
-                          : 'Max Shrink'}{' '}
-                        (CQ {crf})
+                          ? 'BALANCED'
+                          : 'MAX SHRINK'}
                       </span>
                     </div>
-                    <div className="preset-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+                    <div className="matrix-selector-row" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
                       {[
-                        { label: 'Lossless', val: 19 },
-                        { label: 'Sharp HQ', val: 22 },
-                        { label: 'Balanced', val: 25 },
-                        { label: 'Small', val: 28 },
+                        { label: 'LOSSLESS', val: 19 },
+                        { label: 'STUDIO HQ', val: 22 },
+                        { label: 'BALANCED', val: 25 },
+                        { label: 'SLIM', val: 28 },
                       ].map((q) => (
                         <button
                           key={q.val}
                           type="button"
-                          className={`preset-btn ${crf === q.val ? 'selected-emerald' : ''}`}
+                          className={`deck-pod-btn ${crf === q.val ? 'selected-amber' : ''}`}
                           onClick={() => setCrf(q.val)}
                         >
                           {q.label}
@@ -1656,7 +1782,7 @@ export default function App() {
                       min="16"
                       max="34"
                       step="1"
-                      className="range-slider"
+                      className="tactile-slider"
                       value={crf}
                       onChange={(e) => setCrf(Number(e.target.value))}
                     />
@@ -1664,23 +1790,24 @@ export default function App() {
                       style={{
                         display: 'flex',
                         justifyContent: 'space-between',
-                        fontSize: '10.5px',
-                        color: 'var(--text-muted)',
+                        fontFamily: 'JetBrains Mono',
+                        fontSize: '10px',
+                        color: 'var(--text-dim)',
                       }}
                     >
-                      <span>← Maximum Sharpness</span>
-                      <span>Smaller File Size →</span>
+                      <span>← RAZOR SHARPNESS</span>
+                      <span>MAXIMUM SHRINKAGE →</span>
                     </div>
                   </div>
                 ) : (
-                  <div className="control-section">
-                    <div className="control-label">
-                      <span>Target File Size Limit</span>
+                  <div className="deck-section">
+                    <div className="deck-section-title">
+                      <span>TARGET FILE SIZE CAP</span>
                       <span className="val">
                         {targetSizeMB} MB (~{bitratePlan.videoKbps} kbps)
                       </span>
                     </div>
-                    <div className="preset-grid">
+                    <div className="matrix-selector-row">
                       {[
                         { label: '8 MB', mb: 8 },
                         { label: '10 MB', mb: 10 },
@@ -1691,8 +1818,8 @@ export default function App() {
                         <button
                           key={p.mb}
                           type="button"
-                          className={`preset-btn ${
-                            Math.abs(targetSizeMB - p.mb) < 0.05 ? 'selected' : ''
+                          className={`deck-pod-btn ${
+                            Math.abs(targetSizeMB - p.mb) < 0.05 ? 'selected-cyan' : ''
                           }`}
                           onClick={() => setTargetSizeMB(p.mb)}
                         >
@@ -1702,18 +1829,18 @@ export default function App() {
                     </div>
 
                     <div style={{ marginTop: 4 }}>
-                      <div className="control-label" style={{ marginBottom: 4 }}>
-                        <span style={{ fontSize: '11px' }}>
-                          Scale by % ({targetSizePct}%) or type exact MB:
+                      <div className="deck-section-title" style={{ marginBottom: 4 }}>
+                        <span style={{ fontSize: '10.5px' }}>
+                          SCALE BY % ({targetSizePct}%) OR TYPE MB:
                         </span>
                       </div>
-                      <div className="input-row">
+                      <div style={{ display: 'flex', gap: 8 }}>
                         <input
                           type="range"
                           min="10"
                           max="90"
                           step="5"
-                          className="range-slider"
+                          className="tactile-slider"
                           value={targetSizePct}
                           onChange={(e) => {
                             const pct = Number(e.target.value);
@@ -1731,8 +1858,8 @@ export default function App() {
                           min="0.2"
                           max="2000"
                           step="0.5"
-                          className="number-input"
-                          style={{ width: 86, textAlign: 'right' }}
+                          className="tactile-input"
+                          style={{ width: 84, textAlign: 'right' }}
                           value={targetSizeMB}
                           onChange={(e) =>
                             setTargetSizeMB(Math.max(0.2, Number(e.target.value) || 1))
@@ -1744,49 +1871,48 @@ export default function App() {
                     {qualityHealth.needsOptimize && (
                       <button
                         type="button"
-                        className="btn btn-sm"
+                        className="tactile-btn tactile-btn-sm"
                         style={{
                           marginTop: 4,
-                          borderColor: 'rgba(251, 146, 60, 0.45)',
-                          background: 'rgba(251, 146, 60, 0.1)',
+                          borderColor: 'rgba(249, 115, 22, 0.45)',
+                          background: 'rgba(249, 115, 22, 0.12)',
                           color: '#fdba74',
                           width: '100%',
                         }}
                         onClick={handleAutoOptimizeForTargetSize}
                       >
-                        <Sparkles size={13} />
-                        Auto-Optimize Resolution for {targetSizeMB} MB
+                        <Sparkles size={12} />
+                        Auto-Scale Resolution to Fit {targetSizeMB} MB
                       </button>
                     )}
                   </div>
                 )}
 
-                {/* 3. Resolution, Frame Rate & Audio */}
-                <div className="control-section">
-                  <div className="control-label">
-                    <span>Resolution &amp; Frame Rate</span>
+                {/* Spatial (Res & FPS) Conditioning */}
+                <div className="deck-section">
+                  <div className="deck-section-title">
+                    <span>SPATIAL &amp; TEMPORAL RESOLUTION</span>
                     <span className="val">
-                      {targetDims.width}×{targetDims.height} ·{' '}
-                      {fpsPreset === 'original' ? `${meta.fps} fps` : `${fpsPreset} fps`}
+                      {targetDims.width}×{targetDims.height} • {fpsPreset === 'original' ? meta.fps : fpsPreset}P
                     </span>
                   </div>
-                  <div className="input-row">
+                  <div style={{ display: 'flex', gap: 8 }}>
                     <select
-                      className="select-input"
+                      className="tactile-select"
                       value={resolutionPreset}
                       onChange={(e) => setResolutionPreset(e.target.value)}
                     >
                       <option value="original">Original ({meta.width}×{meta.height})</option>
                       <option value="2160">4K UHD (2160p)</option>
                       <option value="1440">2K QHD (1440p)</option>
-                      <option value="1080">Full HD (1080p)</option>
-                      <option value="720">HD (720p)</option>
-                      <option value="480">SD (480p)</option>
-                      <option value="360">Compact (360p)</option>
+                      <option value="1080">1080p FHD</option>
+                      <option value="720">720p HD</option>
+                      <option value="480">480p SD</option>
+                      <option value="360">360p Compact</option>
                     </select>
                     <select
-                      className="select-input"
-                      style={{ width: '140px' }}
+                      className="tactile-select"
+                      style={{ width: '135px' }}
                       value={fpsPreset}
                       onChange={(e) => setFpsPreset(e.target.value)}
                     >
@@ -1799,52 +1925,46 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="control-section">
-                  <div className="control-label">
-                    <span>Audio</span>
-                    <span className="val">
-                      {audioMode === 'strip'
-                        ? 'Muted'
-                        : audioMode === 'copy'
-                        ? 'Original Lossless'
-                        : `AAC ${audioBitrateKbps}k`}
-                    </span>
+                {/* Audio Track Conditioning */}
+                <div className="deck-section">
+                  <div className="deck-section-title">
+                    <span>AUDIO TRACK CONDITIONING</span>
                   </div>
-                  <div className="preset-grid" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
+                  <div className="matrix-selector-row" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
                     <button
                       type="button"
-                      className={`preset-btn ${audioMode === 'copy' ? 'selected-emerald' : ''}`}
+                      className={`deck-pod-btn ${audioMode === 'copy' ? 'selected-emerald' : ''}`}
                       onClick={() => setAudioMode('copy')}
                     >
-                      Keep Original
+                      PASSTHROUGH
                     </button>
                     <button
                       type="button"
-                      className={`preset-btn ${audioMode === 'aac' ? 'selected' : ''}`}
+                      className={`deck-pod-btn ${audioMode === 'aac' ? 'selected-amber' : ''}`}
                       onClick={() => setAudioMode('aac')}
                     >
-                      Compress AAC
+                      AAC ENCODE
                     </button>
                     <button
                       type="button"
-                      className={`preset-btn ${audioMode === 'strip' ? 'selected' : ''}`}
+                      className={`deck-pod-btn ${audioMode === 'strip' ? 'selected-cyan' : ''}`}
                       onClick={() => setAudioMode('strip')}
                     >
-                      Mute Audio
+                      MUTE
                     </button>
                   </div>
                 </div>
 
-                {/* 4. Collapsible Pro / GPU Encoder Settings */}
-                <div className="pro-accordion">
+                {/* Hardware Turbo Accordion (Pro Settings) */}
+                <div className="turbo-accordion">
                   <button
                     type="button"
-                    className="pro-accordion-header"
+                    className="turbo-header-btn"
                     onClick={() => setShowProSettings((v) => !v)}
                   >
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                      <Sliders size={13} style={{ color: '#38bdf8' }} />
-                      Pro Codec &amp; GPU Tuning
+                      <Sliders size={13} style={{ color: 'var(--flare-amber)' }} />
+                      PRO GPU &amp; CODEC ACCELERATOR
                     </span>
                     <span
                       style={{
@@ -1852,42 +1972,39 @@ export default function App() {
                         alignItems: 'center',
                         gap: 6,
                         fontSize: '11px',
-                        color: '#34d399',
-                        fontFamily: 'JetBrains Mono, monospace',
+                        color: 'var(--phosphor-green-bright)',
+                        fontFamily: 'JetBrains Mono',
                       }}
                     >
-                      {codec.toUpperCase()} {psychoVisualHq ? '· 2-Pass AQ' : ''}
+                      {codec.toUpperCase()} {psychoVisualHq ? '• 2-PASS AQ' : ''}
                       {showProSettings ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                     </span>
                   </button>
 
                   {showProSettings && (
-                    <div className="pro-accordion-body">
-                      <div className="control-section">
-                        <div className="control-label">
-                          <span>Video Codec</span>
-                          <span className="val">
-                            {codec === 'hevc' ? '45% smaller than H.264' : 'Universal'}
-                          </span>
+                    <div className="turbo-body">
+                      <div className="deck-section">
+                        <div className="deck-section-title">
+                          <span>SILICON CODEC ARCHITECTURE</span>
                         </div>
-                        <div className="preset-grid" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
+                        <div className="matrix-selector-row" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
                           {[
-                            { id: 'hevc', label: 'HEVC (H.265)', sub: 'Best Efficiency' },
-                            { id: 'h264', label: 'H.264 (AVC)', sub: 'Max Compatibility' },
-                            { id: 'av1', label: 'AV1', sub: 'Next-Gen' },
+                            { id: 'hevc', label: 'HEVC H.265', sub: '✨ 45% SMALLER' },
+                            { id: 'h264', label: 'H.264 AVC', sub: 'UNIVERSAL' },
+                            { id: 'av1', label: 'AV1', sub: 'NEXT-GEN' },
                           ].map((c) => (
                             <button
                               key={c.id}
                               type="button"
-                              className={`preset-btn ${codec === c.id ? 'selected-emerald' : ''}`}
+                              className={`deck-pod-btn ${codec === c.id ? 'selected-amber' : ''}`}
                               onClick={() => setCodec(c.id)}
                             >
                               {c.label}
                               <span
                                 style={{
                                   display: 'block',
-                                  fontSize: '9.5px',
-                                  color: codec === c.id ? '#a7f3d0' : 'var(--text-muted)',
+                                  fontSize: '9px',
+                                  color: codec === c.id ? 'var(--flare-amber)' : 'var(--text-dim)',
                                   marginTop: 1,
                                 }}
                               >
@@ -1903,24 +2020,20 @@ export default function App() {
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'space-between',
-                          padding: '8px 10px',
-                          borderRadius: 8,
-                          background: psychoVisualHq
-                            ? 'rgba(16, 185, 129, 0.09)'
-                            : 'rgba(255,255,255,0.03)',
-                          border: `1px solid ${
-                            psychoVisualHq ? 'rgba(16, 185, 129, 0.35)' : 'var(--border-subtle)'
-                          }`,
+                          padding: '9px 12px',
+                          borderRadius: 6,
+                          background: psychoVisualHq ? 'rgba(245,158,11,0.08)' : 'rgba(255,255,255,0.02)',
+                          border: `1px solid ${psychoVisualHq ? 'rgba(245,158,11,0.35)' : 'var(--border-subtle)'}`,
                           cursor: 'pointer',
                         }}
                         onClick={() => setPsychoVisualHq((v) => !v)}
                       >
                         <div>
-                          <div style={{ fontSize: '12px', fontWeight: 700, color: '#34d399' }}>
-                            Psycho-Visual GPU Enhancer
+                          <div style={{ fontSize: '11.5px', fontWeight: 700, color: 'var(--flare-amber)', fontFamily: 'Space Grotesk' }}>
+                            PSYCHO-VISUAL 2-PASS AQ
                           </div>
-                          <div style={{ fontSize: '10.5px', color: 'var(--text-secondary)' }}>
-                            2-Pass FullRes + Spatial/Temporal AQ + 24f Lookahead
+                          <div style={{ fontSize: '10px', color: 'var(--text-sub)', fontFamily: 'JetBrains Mono' }}>
+                            Spatial/temporal adaptivity + 24-frame lookahead
                           </div>
                         </div>
                         <input
@@ -1928,12 +2041,7 @@ export default function App() {
                           checked={psychoVisualHq}
                           onChange={(e) => setPsychoVisualHq(e.target.checked)}
                           onClick={(e) => e.stopPropagation()}
-                          style={{
-                            width: 16,
-                            height: 16,
-                            accentColor: '#10b981',
-                            cursor: 'pointer',
-                          }}
+                          style={{ width: 16, height: 16, accentColor: 'var(--flare-amber)', cursor: 'pointer' }}
                         />
                       </div>
                     </div>
@@ -1942,69 +2050,75 @@ export default function App() {
               </>
             )}
 
-            {/* Live Size Comparison & Savings Meter */}
-            <div className="estimate-box">
-              <div className="estimate-row">
-                <span style={{ color: 'var(--text-secondary)' }}>Original Size</span>
+            {/* Segmented LED Hologram Barometer (Savings Meter) */}
+            <div className="hologram-savings-box">
+              <div className="hologram-row">
+                <span style={{ color: 'var(--text-sub)' }}>SOURCE FILE:</span>
                 <strong>{videoFile ? formatBytes(meta.size) : '—'}</strong>
               </div>
-              <div className="estimate-row">
-                <span style={{ color: 'var(--text-secondary)' }}>
-                  {outputResult?.primary ? 'Final Output Size' : 'Estimated Output'}
+              <div className="hologram-row">
+                <span style={{ color: 'var(--text-sub)' }}>
+                  {outputResult?.primary ? 'RENDERED FILE:' : 'PREDICTED SIZE:'}
                 </span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                  <strong style={{ color: '#38bdf8', fontSize: '13.5px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <strong style={{ color: 'var(--flare-amber)' }}>
                     {videoFile ? formatBytes(activeOutputBytes) : '—'}
                   </strong>
                   {videoFile && savingsPct > 0 && (
-                    <span className="savings-badge">Save {savingsPct}%</span>
+                    <span className="flare-badge">-{savingsPct}%</span>
                   )}
                 </div>
               </div>
-              {videoFile && (
-                <div className="size-meter-track" title={`Output is ${sizeMeterPct}% of original size`}>
-                  <div className="size-meter-fill" style={{ width: `${sizeMeterPct}%` }} />
-                </div>
-              )}
+
+              {/* 16-Segment LED Barometer */}
+              <div className="led-gauge-track" title={`Predicted footprint: ${100 - savingsPct}% of source`}>
+                {Array.from({ length: 16 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className={`led-bar-seg ${
+                      i < ledLitCount ? 'lit-flare' : ''
+                    }`}
+                  />
+                ))}
+              </div>
             </div>
 
-            {/* Primary Action Button */}
+            {/* Ignition Action CTA */}
             <button
               type="button"
-              className={`btn action-cta ${
-                workflowMode === 'lossless' ? 'btn-emerald' : 'btn-primary'
+              className={`tactile-btn primary-ignition-cta ${
+                workflowMode === 'lossless' ? 'tactile-btn-emerald' : 'tactile-btn-flare'
               }`}
               disabled={!videoFile || isProcessing}
               onClick={handleRunAction}
             >
               {isProcessing ? (
                 <>
-                  Processing... {Math.round(progress * 100)}%
-                  {encodingStats.fps > 0 ? ` · ${encodingStats.fps} FPS` : ''}
+                  PROCESSING... {Math.round(progress * 100)}%
+                  {encodingStats.fps > 0 ? ` • ${encodingStats.fps} FPS` : ''}
                   {encodingStats.speed ? ` (${encodingStats.speed})` : ''}
                 </>
               ) : !videoFile ? (
-                <>Select a Video to Start</>
+                <>FEED VIDEO TO COMMENCE</>
               ) : workflowMode === 'lossless' ? (
                 <>
-                  <Scissors size={16} />
-                  Export Lossless {segments.length > 1 && !mergeSegments ? 'Split' : 'Cut'} (
-                  {segments.length} {segments.length === 1 ? 'Clip' : 'Clips'})
+                  <Scissors size={15} />
+                  COMMENCE STREAM-COPY CUT ({segments.length} CLIPS)
                 </>
               ) : (
                 <>
-                  <Zap size={16} />
-                  Compress Video ({codec.toUpperCase()} · {targetDims.width}×{targetDims.height})
+                  <Zap size={15} />
+                  IGNITE GPU ACCELERATION ({codec.toUpperCase()})
                 </>
               )}
             </button>
 
-            {/* Live Progress Bar */}
+            {/* Real-Time Telemetry Bar During Processing */}
             {isProcessing && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <div className="progress-track">
+                <div className="cyber-progress-track">
                   <div
-                    className="progress-fill"
+                    className="cyber-progress-fill"
                     style={{ width: `${Math.max(4, Math.round(progress * 100))}%` }}
                   />
                 </div>
@@ -2012,20 +2126,19 @@ export default function App() {
                   style={{
                     display: 'flex',
                     justifyContent: 'space-between',
-                    fontSize: '11.5px',
-                    color: 'var(--text-secondary)',
+                    fontFamily: 'JetBrains Mono',
+                    fontSize: '11px',
+                    color: 'var(--text-sub)',
                   }}
                 >
                   <span>
                     {workflowMode === 'lossless'
-                      ? 'Copying video stream (-c copy)...'
-                      : `Hardware GPU Encoding (${codec.toUpperCase()})...`}
+                      ? 'STREAM RE-MUXING (-C COPY)...'
+                      : `HARDWARE NVENC ENCODING (${codec.toUpperCase()})...`}
                   </span>
-                  <span style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                  <span>
                     {encodingStats.fps > 0
-                      ? `${encodingStats.fps} FPS ${
-                          encodingStats.speed ? `· ${encodingStats.speed}` : ''
-                        }`
+                      ? `${encodingStats.fps} FPS • ${encodingStats.speed || 'FAST'}`
                       : `${Math.round(progress * 100)}%`}
                   </span>
                 </div>
@@ -2036,9 +2149,9 @@ export default function App() {
               <div
                 style={{
                   padding: '10px 12px',
-                  borderRadius: 8,
-                  background: 'rgba(244, 63, 94, 0.12)',
-                  border: '1px solid rgba(244, 63, 94, 0.35)',
+                  borderRadius: 6,
+                  background: 'rgba(244, 63, 94, 0.14)',
+                  border: '1px solid rgba(244, 63, 94, 0.4)',
                   color: '#fda4af',
                   fontSize: '12px',
                 }}
@@ -2048,29 +2161,29 @@ export default function App() {
             )}
           </div>
 
-          {/* Completed Output & Download Card */}
+          {/* Mission Complete Result Card */}
           {outputResult?.primary && (
-            <div className="result-card">
+            <div className="mission-complete-card">
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontWeight: 700 }}>
-                  <CheckCircle2 size={17} style={{ color: '#34d399' }} />
-                  <span>Ready in {outputResult.elapsedSec.toFixed(2)}s</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontWeight: 700, fontFamily: 'Space Grotesk' }}>
+                  <CheckCircle2 size={16} style={{ color: 'var(--phosphor-green-bright)' }} />
+                  <span>RENDER COMPLETED IN {outputResult.elapsedSec.toFixed(2)}s</span>
                 </div>
-                <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                <span style={{ fontFamily: 'JetBrains Mono', fontSize: '10.5px', color: 'var(--text-sub)' }}>
                   {outputResult.engineUsed}
                 </span>
               </div>
 
-              <div className="estimate-row" style={{ fontSize: '13px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '12.5px' }}>
                 <span>
                   {formatBytes(meta.size)} →{' '}
-                  <strong style={{ color: '#34d399' }}>
+                  <strong style={{ color: 'var(--phosphor-green-bright)', fontFamily: 'JetBrains Mono' }}>
                     {formatBytes(outputResult.primary.size)}
                   </strong>
                 </span>
                 {savingsPct > 0 && (
-                  <span className="savings-badge">
-                    Saved {savingsPct}% ({formatBytes(Math.max(0, meta.size - outputResult.primary.size))})
+                  <span className="flare-badge">
+                    LIBERATED {savingsPct}% ({formatBytes(Math.max(0, meta.size - outputResult.primary.size))})
                   </span>
                 )}
               </div>
@@ -2078,22 +2191,20 @@ export default function App() {
               <div style={{ display: 'flex', gap: 8 }}>
                 <button
                   type="button"
-                  className="btn btn-emerald"
+                  className="tactile-btn tactile-btn-emerald"
                   style={{ flex: 1, padding: '10px 14px' }}
                   onClick={() => triggerDownload(outputResult.primary)}
                 >
-                  <Download size={15} />
-                  Download Video
+                  <Download size={14} />
+                  DOWNLOAD OUTPUT FILE
                 </button>
                 <button
                   type="button"
-                  className="btn"
-                  onClick={() =>
-                    handleSwitchPreviewMode(previewMode === 'output' ? 'original' : 'output')
-                  }
+                  className="tactile-btn"
+                  onClick={() => handleSwitchPreviewMode(previewMode === 'split-wipe' ? 'original' : 'split-wipe')}
                 >
-                  <Eye size={14} />
-                  {previewMode === 'output' ? 'View Original' : 'Compare Quality'}
+                  <Sliders size={13} style={{ color: 'var(--flare-amber)' }} />
+                  A/B WIPE
                 </button>
               </div>
 
@@ -2108,8 +2219,8 @@ export default function App() {
                     borderTop: '1px solid var(--border-subtle)',
                   }}
                 >
-                  <div style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-secondary)' }}>
-                    Split Clips ({outputResult.segments.length} files):
+                  <div style={{ fontFamily: 'Space Grotesk', fontSize: '11.5px', fontWeight: 700, color: 'var(--text-sub)' }}>
+                    INDIVIDUAL SPLIT CLIPS ({outputResult.segments.length} FILES):
                   </div>
                   {outputResult.segments.map((seg) => (
                     <div
@@ -2118,22 +2229,24 @@ export default function App() {
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
-                        background: 'rgba(0,0,0,0.28)',
-                        padding: '7px 10px',
-                        borderRadius: 7,
-                        fontSize: '12px',
+                        background: '#07090e',
+                        padding: '6px 10px',
+                        borderRadius: 6,
+                        fontSize: '11.5px',
+                        fontFamily: 'JetBrains Mono',
                       }}
                     >
                       <span>
-                        <strong>Clip #{seg.index}</strong> ({formatTimecode(seg.start, false)}–
-                        {formatTimecode(seg.end, false)}) · {formatBytes(seg.size)}
+                        <strong>CLIP #{seg.index}</strong> ({formatTimecode(seg.start, false)}–
+                        {formatTimecode(seg.end, false)}) • {formatBytes(seg.size)}
                       </span>
                       <button
                         type="button"
-                        className="btn btn-sm"
+                        className="tactile-btn tactile-btn-sm"
+                        style={{ padding: '3px 8px', fontSize: '11px' }}
                         onClick={() => triggerDownload(seg)}
                       >
-                        <Download size={12} /> Save
+                        <Download size={11} /> SAVE
                       </button>
                     </div>
                   ))}
@@ -2142,8 +2255,8 @@ export default function App() {
             </div>
           )}
 
-          {/* Compact Engine Console Logs Drawer */}
-          <div className="sidebar-card" style={{ padding: '10px 14px' }}>
+          {/* Engine Terminal Console Drawer */}
+          <div className="control-module-card" style={{ padding: '10px 14px' }}>
             <div
               style={{
                 display: 'flex',
@@ -2153,30 +2266,30 @@ export default function App() {
               }}
               onClick={() => setShowLogs((s) => !s)}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '12px' }}>
-                <Terminal size={13} style={{ color: '#38bdf8' }} />
-                <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>
-                  Engine Console Logs
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '11.5px' }}>
+                <Terminal size={13} style={{ color: 'var(--flare-amber)' }} />
+                <span style={{ fontFamily: 'Space Grotesk', fontWeight: 700, color: 'var(--text-sub)' }}>
+                  GPU PIPELINE TELEMETRY LOGS
                 </span>
               </div>
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                {showLogs ? 'Hide' : 'Show'}
+              <span style={{ fontFamily: 'JetBrains Mono', fontSize: '10.5px', color: 'var(--text-dim)' }}>
+                {showLogs ? 'COLLAPSE' : 'EXPAND'}
               </span>
             </div>
             {showLogs && (
-              <div className="log-drawer">
-                {logs.length === 0 ? 'Engine ready. Waiting for job...' : logs.join('\n')}
+              <div className="engine-terminal-drawer">
+                {logs.length === 0 ? 'Silicon GPU pipeline primed. Awaiting stream...' : logs.join('\n')}
               </div>
             )}
           </div>
         </aside>
       </main>
 
-      {/* Subtle Floating Toast Feedback */}
+      {/* Tactical Toast Notification */}
       {toastMsg && (
-        <div className="toast-pill">
-          <Sparkles size={14} style={{ color: '#38bdf8' }} />
-          {toastMsg}
+        <div className="tactical-toast">
+          <Sparkles size={13} style={{ color: 'var(--flare-amber)' }} />
+          <span>{toastMsg}</span>
         </div>
       )}
     </div>

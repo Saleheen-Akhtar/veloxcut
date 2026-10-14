@@ -27,6 +27,7 @@ export async function runNativeNvencJob({
   crf = 20,
   targetVideoKbps = 2500,
   audioMode = 'copy',
+  audioBitrateKbps = 160,
   psychoVisualHq = true,
   enhanceMode = 'cinema',
   antiPlasticGrain = true,

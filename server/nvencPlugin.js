@@ -159,6 +159,9 @@ export function nvencAcceleratorPlugin() {
               audioMode = 'copy',
               audioBitrateKbps = 160,
               psychoVisualHq = true,
+              enhanceMode = 'cinema', // 'cinema' | 'standard' | 'off'
+              antiPlasticGrain = true,
+              casStrength = 0.65,
             } = body;
 
             const inputPath = path.join(WORK_DIR, path.basename(inputId));
@@ -317,11 +320,37 @@ export function nvencAcceleratorPlugin() {
               inputPath,
             ];
 
-            // Use Lanczos sharp scaling when resizing so fine edges and text stay razor-sharp
+            // Cinema Restoration & Super-Resolution Filter Chain
             const vf = [];
-            if (width && height) {
-              vf.push(`scale=${width}:${height}:flags=lanczos`);
+            const isCinemaEnhance = enhanceMode === 'cinema';
+
+            if (isCinemaEnhance) {
+              // 1. Adaptive Temporal Deblocking: cleans compression macroblocks across time without melting facial textures
+              vf.push('atadenoise=0a=0.04:0b=0.06:1a=0.04:1b=0.06');
+
+              // 2. High-precision Sinc Lanczos-4 scaling with accurate rounding
+              if (width && height) {
+                vf.push(`scale=${width}:${height}:flags=lanczos+accurate_rnd`);
+              }
+
+              // 3. AMD FidelityFX CAS (Contrast-Adaptive Sharpening): sharpens contours without white halos
+              const cleanCas = Math.max(0, Math.min(1, Number(casStrength) || 0.65));
+              vf.push(`cas=strength=${cleanCas.toFixed(2)}`);
+
+              // 4. Subtle micro-contrast sharpening
+              vf.push('unsharp=3:3:0.35:3:3:0.15');
+
+              // 5. Anti-Plastic Organic Micro-Grain Synthesis
+              // Injects microscopic optical sensor grain to eliminate the waxy/plastic look
+              if (antiPlasticGrain) {
+                vf.push('noise=alls=2:allf=t+u');
+              }
+            } else {
+              if (width && height) {
+                vf.push(`scale=${width}:${height}:flags=lanczos`);
+              }
             }
+
             if (fps && fps !== 'original') {
               vf.push(`fps=${fps}`);
             }
@@ -331,7 +360,7 @@ export function nvencAcceleratorPlugin() {
 
             if (!isAv1) {
               // NVIDIA NVENC Hardware Encoder with Psycho-Visual Quality Tuning
-              const nvencPreset = psychoVisualHq ? 'p6' : 'p3';
+              const nvencPreset = isCinemaEnhance ? 'p7' : psychoVisualHq ? 'p6' : 'p3';
               args.push(
                 '-c:v',
                 encoderName,
@@ -345,16 +374,16 @@ export function nvencAcceleratorPlugin() {
                 'yuv420p'
               );
 
-              if (psychoVisualHq) {
+              if (psychoVisualHq || isCinemaEnhance) {
                 args.push(
                   '-spatial-aq',
                   '1',
                   '-aq-strength',
-                  '8',
+                  isCinemaEnhance ? '10' : '8',
                   '-temporal-aq',
                   '1',
                   '-rc-lookahead',
-                  '24',
+                  isCinemaEnhance ? '32' : '24',
                   '-b_ref_mode',
                   'middle'
                 );

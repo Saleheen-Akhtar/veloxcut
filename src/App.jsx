@@ -145,6 +145,9 @@ export default function App() {
   const [targetSizePct, setTargetSizePct] = useState(50);
   const [resolutionPreset, setResolutionPreset] = useState('original');
   const [fpsPreset, setFpsPreset] = useState('original');
+  const [enhanceMode, setEnhanceMode] = useState('cinema'); // 'cinema' | 'standard'
+  const [antiPlasticGrain, setAntiPlasticGrain] = useState(true);
+  const [casStrength, setCasStrength] = useState(0.65);
   const [audioMode, setAudioMode] = useState('copy'); // 'copy' | 'aac' | 'strip'
   const [audioBitrateKbps, setAudioBitrateKbps] = useState(160);
 
@@ -220,11 +223,20 @@ export default function App() {
     return bars;
   }, []);
 
-  // Target dimensions & bitrates
   const targetDims = useMemo(
     () => calculateTargetDimensions(meta.width, meta.height, resolutionPreset),
     [meta.width, meta.height, resolutionPreset]
   );
+
+  const isUpscaling = useMemo(() => {
+    if (!meta.height || !targetDims.height) return false;
+    return targetDims.height > meta.height || targetDims.width > meta.width;
+  }, [meta.width, meta.height, targetDims.width, targetDims.height]);
+
+  const scaleMultiplier = useMemo(() => {
+    if (!meta.height || !targetDims.height) return '1.0';
+    return (targetDims.height / meta.height).toFixed(1);
+  }, [meta.height, targetDims.height]);
 
   const bitratePlan = useMemo(
     () =>
@@ -689,6 +701,9 @@ export default function App() {
           audioMode,
           audioBitrateKbps,
           psychoVisualHq,
+          enhanceMode,
+          antiPlasticGrain,
+          casStrength,
           onProgress: ({ progress: p, fps, speed }) => {
             setProgress(p);
             setEncodingStats((prev) => ({ ...prev, fps: fps || prev.fps, speed: speed || prev.speed }));
@@ -1372,9 +1387,9 @@ export default function App() {
                         onChange={(e) => setResolutionPreset(e.target.value)}
                       >
                         <option value="original">Original ({meta.width}×{meta.height})</option>
-                        <option value="2160">4K (2160p)</option>
-                        <option value="1440">2K (1440p)</option>
-                        <option value="1080">1080p FHD</option>
+                        <option value="2160">AI Cinema 4K UHD (2160p)</option>
+                        <option value="1440">Enhanced 2K QHD (1440p)</option>
+                        <option value="1080">Enhanced 1080p FHD</option>
                         <option value="720">720p HD</option>
                         <option value="480">480p SD</option>
                       </select>
@@ -1390,6 +1405,78 @@ export default function App() {
                         <option value="24">24 fps</option>
                       </select>
                     </div>
+                  </div>
+
+                  {/* AI Cinema Enhancement Suite (Anti-Plastic Super-Resolution) */}
+                  <div className="inspector-group cinema-enhancement-card">
+                    <div className="inspector-group-title">
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#38bdf8' }}>
+                        <Sparkles size={13} />
+                        AI Cinema Enhancer
+                      </span>
+                      {isUpscaling && (
+                        <span className="enhancer-badge">
+                          {scaleMultiplier}× Super-Res
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="segmented-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
+                      <button
+                        type="button"
+                        className={`seg-btn ${enhanceMode === 'cinema' ? 'active-blue' : ''}`}
+                        onClick={() => setEnhanceMode('cinema')}
+                      >
+                        Cinema Anti-Plastic
+                      </button>
+                      <button
+                        type="button"
+                        className={`seg-btn ${enhanceMode === 'standard' ? 'active-blue' : ''}`}
+                        onClick={() => setEnhanceMode('standard')}
+                      >
+                        Standard
+                      </button>
+                    </div>
+
+                    {enhanceMode === 'cinema' && (
+                      <div className="enhancer-subpanel">
+                        {/* Anti-Plastic Organic Texture Guard */}
+                        <label className="enhancer-toggle-row">
+                          <div className="enhancer-label-text">
+                            <strong>Organic Texture Guard</strong>
+                            <span>Injects fine sensor grain to stop plastic wax look</span>
+                          </div>
+                          <input
+                            type="checkbox"
+                            checked={antiPlasticGrain}
+                            onChange={(e) => setAntiPlasticGrain(e.target.checked)}
+                          />
+                        </label>
+
+                        {/* AMD FidelityFX CAS Sharpness */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-secondary)' }}>
+                            <span>Contrast-Adaptive Sharpen (CAS)</span>
+                            <span style={{ fontFamily: 'var(--font-mono)', color: '#38bdf8' }}>
+                              {Math.round(casStrength * 100)}%
+                            </span>
+                          </div>
+                          <input
+                            type="range"
+                            min="0"
+                            max="1"
+                            step="0.05"
+                            className="slider-control"
+                            value={casStrength}
+                            onChange={(e) => setCasStrength(Number(e.target.value))}
+                          />
+                        </div>
+
+                        <div className="enhancer-pipeline-info">
+                          Temporal Deblock • AMD CAS • Sinc Lanczos-4
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Audio */}

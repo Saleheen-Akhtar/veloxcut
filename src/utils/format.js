@@ -47,11 +47,6 @@ export function calculateTargetDimensions(srcWidth, srcHeight, resolutionPreset)
   const isLandscape = srcWidth >= srcHeight;
   const currentShortSide = isLandscape ? srcHeight : srcWidth;
 
-  // Never upscale if preset is larger than source
-  if (targetShortSide >= currentShortSide) {
-    return { width: makeEven(srcWidth), height: makeEven(srcHeight) };
-  }
-
   const scale = targetShortSide / currentShortSide;
   return {
     width: makeEven(srcWidth * scale),

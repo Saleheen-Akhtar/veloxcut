@@ -322,7 +322,8 @@ export function nvencAcceleratorPlugin() {
 
             // Cinema Restoration & Super-Resolution Filter Chain
             const vf = [];
-            const isCinemaEnhance = enhanceMode === 'cinema';
+            const isUpscaleWorkflow = workflowMode === 'upscale' || workflowMode === 'enhance';
+            const isCinemaEnhance = isUpscaleWorkflow || enhanceMode === 'cinema';
 
             if (isCinemaEnhance) {
               // 1. Adaptive Temporal Deblocking: cleans compression macroblocks across time without melting facial textures
@@ -393,7 +394,10 @@ export function nvencAcceleratorPlugin() {
                 args.push('-tag:v', 'hvc1');
               }
 
-              if (rateControlMode === 'size') {
+              if (isUpscaleWorkflow) {
+                // MASTERING SUPER-RESOLUTION: UNCONSTRAINED MASTERING BITRATE (NEVER COMPRESS!)
+                args.push('-rc', 'vbr', '-cq', '14', '-b:v', '0', '-maxrate', '80M', '-bufsize', '160M');
+              } else if (rateControlMode === 'size') {
                 const vKbps = Math.max(100, Math.floor(targetVideoKbps));
                 args.push(
                   '-rc',
@@ -412,7 +416,9 @@ export function nvencAcceleratorPlugin() {
             } else {
               // SVT-AV1 Multi-Core Encoder fallback for AV1
               args.push('-c:v', 'libsvtav1', '-preset', '8', '-pix_fmt', 'yuv420p');
-              if (rateControlMode === 'size') {
+              if (isUpscaleWorkflow) {
+                args.push('-crf', '14');
+              } else if (rateControlMode === 'size') {
                 const vKbps = Math.max(100, Math.floor(targetVideoKbps));
                 args.push('-rc', '1', '-b:v', `${vKbps}k`);
               } else {
@@ -455,17 +461,23 @@ export function nvencAcceleratorPlugin() {
             sendEvent({
               type: 'done',
               primary: {
-                label: `NVENC HQ (${codec.toUpperCase()})`,
+                label: isUpscaleWorkflow
+                  ? `AI Cinema ${width}×${height} UHD`
+                  : `NVENC HQ (${codec.toUpperCase()})`,
                 start: startTime,
                 end: endTime,
                 duration: clipDuration,
                 fileId: outId,
                 size: stat.size,
-                filename: `${baseLabel}_${codec}_hq.mp4`,
+                filename: isUpscaleWorkflow
+                  ? `${baseLabel}_cinema_${height}p.mp4`
+                  : `${baseLabel}_${codec}_hq.mp4`,
               },
               segments: [],
               elapsedSec,
-              engineUsed: `NVIDIA NVENC Psycho-Visual HQ (${encoderName})`,
+              engineUsed: isUpscaleWorkflow
+                ? `NVIDIA NVENC AI Cinema Super-Resolution (${encoderName})`
+                : `NVIDIA NVENC Psycho-Visual HQ (${encoderName})`,
             });
             res.end();
           } catch (err) {

@@ -1487,17 +1487,6 @@ export default function App() {
                       </span>
                     </div>
                   </div>
-
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    style={{ width: '100%', marginTop: 10, padding: '10px 14px' }}
-                    onClick={() => handleRunAction('upscale')}
-                    disabled={isProcessing || !videoFile}
-                  >
-                    <Sparkles size={14} style={{ color: '#38bdf8' }} />
-                    {isProcessing ? 'Upscaling Video...' : `Upscale to ${upscaleDims.width}×${upscaleDims.height}`}
-                  </button>
                 </>
               )}
 
@@ -1742,19 +1731,6 @@ export default function App() {
                       </span>
                     </div>
                   </div>
-
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    style={{ width: '100%', marginTop: 10, padding: '10px 14px' }}
-                    onClick={() => handleRunAction('compress')}
-                    disabled={isProcessing || !videoFile}
-                  >
-                    <Zap size={14} />
-                    {isProcessing
-                      ? 'Compressing Video...'
-                      : `Compress Video (${compressRateMode === 'size' ? compressTargetMB + ' MB' : 'CQ ' + compressCrf})`}
-                  </button>
                 </>
               )}
 
@@ -1879,17 +1855,6 @@ export default function App() {
                       Instant stream copy (-c copy). No transcoding or quality loss.
                     </div>
                   </div>
-
-                  <button
-                    type="button"
-                    className="btn btn-green"
-                    style={{ width: '100%', marginTop: 10, padding: '10px 14px' }}
-                    onClick={() => handleRunAction('lossless')}
-                    disabled={isProcessing || !videoFile}
-                  >
-                    <Scissors size={14} />
-                    {isProcessing ? 'Exporting Clips...' : `Instant Lossless Export (${segments.length} Clips)`}
-                  </button>
                 </>
               )}
 
@@ -2094,7 +2059,7 @@ export default function App() {
                       </>
                     ) : (
                       <>
-                        <Zap size={14} /> Compress Video ({compressCodec.toUpperCase()})
+                        <Zap size={14} /> Compress Video ({compressRateMode === 'size' ? `${compressTargetMB} MB` : `CQ ${compressCrf}`})
                       </>
                     )}
                   </button>

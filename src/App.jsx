@@ -31,6 +31,7 @@ import {
   Smartphone,
   ShieldCheck,
   Check,
+  MousePointer,
 } from 'lucide-react';
 import {
   formatBytes,
@@ -131,7 +132,9 @@ export default function App() {
     },
   });
 
-  // Settings
+  // Feature Navigation & Workflow
+  const [activeToolTab, setActiveToolTab] = useState('enhance'); // 'enhance' | 'compress' | 'cut' | 'audio' | 'media'
+  const [showExportMenu, setShowExportMenu] = useState(false);
   const [workflowMode, setWorkflowMode] = useState('compress'); // 'lossless' | 'compress'
   const [mergeSegments, setMergeSegments] = useState(false);
   const [losslessStripAudio, setLosslessStripAudio] = useState(false);
@@ -205,11 +208,11 @@ export default function App() {
   }, [segments, meta.duration]);
 
   const selectedDuration = useMemo(() => {
-    if (workflowMode === 'lossless') {
+    if (activeToolTab === 'cut' || workflowMode === 'lossless') {
       return segments.reduce((sum, s) => sum + Math.max(0, s.end - s.start), 0);
     }
     return Math.max(0.1, (activeSegment?.end || meta.duration) - (activeSegment?.start || 0));
-  }, [workflowMode, segments, activeSegment, meta.duration]);
+  }, [activeToolTab, workflowMode, segments, activeSegment, meta.duration]);
 
   // Realistic simulated audio waveform heights
   const waveformBars = useMemo(() => {
@@ -650,8 +653,9 @@ export default function App() {
   }, [isDraggingWipe]);
 
   // Execute Action
-  const handleRunAction = async () => {
+  const handleRunAction = async (targetMode) => {
     if (!videoFile || isProcessing) return;
+    setShowExportMenu(false);
     setIsProcessing(true);
     setProgress(0.02);
     setEncodingStats({ fps: 0, speed: '', frame: 0 });
@@ -660,8 +664,9 @@ export default function App() {
     try {
       const start = activeSegment?.start || 0;
       const end = activeSegment?.end || meta.duration;
+      const effectiveMode = targetMode || (activeToolTab === 'cut' ? 'lossless' : 'compress');
 
-      if (workflowMode === 'lossless') {
+      if (effectiveMode === 'lossless') {
         if (nvencAvailable) {
           const res = await runNativeNvencJob({
             file: videoFile,
@@ -783,23 +788,15 @@ export default function App() {
             </div>
           </div>
 
-          <div className="topbar-mode-selector">
-            <button
-              type="button"
-              className={`mode-toggle-btn ${workflowMode === 'lossless' ? 'active cut' : ''}`}
-              onClick={() => setWorkflowMode('lossless')}
-            >
-              <Scissors size={13} />
-              Cut &amp; Split
-            </button>
-            <button
-              type="button"
-              className={`mode-toggle-btn ${workflowMode === 'compress' ? 'active compress' : ''}`}
-              onClick={() => setWorkflowMode('compress')}
-            >
-              <Zap size={13} />
-              Compress
-            </button>
+          <div className="topbar-tool-indicator">
+            <span>Suite:</span>
+            <span className="active-tab">
+              {activeToolTab === 'enhance' && <><Sparkles size={12} /> AI Cinema Enhancer</>}
+              {activeToolTab === 'compress' && <><Zap size={12} /> Compression</>}
+              {activeToolTab === 'cut' && <><Scissors size={12} /> Cut &amp; Clips</>}
+              {activeToolTab === 'audio' && <><Volume2 size={12} /> Audio</>}
+              {activeToolTab === 'media' && <><Film size={12} /> Project Media</>}
+            </span>
           </div>
         </div>
 
@@ -854,20 +851,63 @@ export default function App() {
           </button>
 
           {videoFile && (
-            <button
-              type="button"
-              className={`btn btn-sm ${workflowMode === 'lossless' ? 'btn-green' : 'btn-primary'}`}
-              onClick={handleRunAction}
-              disabled={isProcessing}
-            >
-              {isProcessing ? (
-                <>Processing... {Math.round(progress * 100)}%</>
-              ) : workflowMode === 'lossless' ? (
-                <>Export Cut</>
-              ) : (
-                <>Export ({codec.toUpperCase()})</>
+            <div className="topbar-export-wrapper">
+              <button
+                type="button"
+                className={`btn btn-sm ${activeToolTab === 'cut' ? 'btn-green' : 'btn-primary'}`}
+                onClick={() => setShowExportMenu((v) => !v)}
+                disabled={isProcessing}
+              >
+                {isProcessing ? (
+                  <>Encoding... {Math.round(progress * 100)}%</>
+                ) : (
+                  <>
+                    <Download size={13} />
+                    Export <ChevronDown size={12} />
+                  </>
+                )}
+              </button>
+
+              {showExportMenu && !isProcessing && (
+                <div className="export-dropdown-menu">
+                  <button
+                    type="button"
+                    className="export-dropdown-item"
+                    onClick={() => handleRunAction('lossless')}
+                  >
+                    <Scissors size={15} style={{ color: '#34d399', marginTop: 2, flexShrink: 0 }} />
+                    <div>
+                      <span className="export-dropdown-item-title">Instant Lossless Cut</span>
+                      <span className="export-dropdown-item-desc">Stream-copy in 0.2s with 0% quality loss</span>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="export-dropdown-item"
+                    onClick={() => handleRunAction('enhance')}
+                  >
+                    <Sparkles size={15} style={{ color: '#38bdf8', marginTop: 2, flexShrink: 0 }} />
+                    <div>
+                      <span className="export-dropdown-item-title">AI Cinema 4K Super-Res</span>
+                      <span className="export-dropdown-item-desc">RTX 4050 NVENC p7 with Anti-Plastic Grain &amp; CAS</span>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="export-dropdown-item"
+                    onClick={() => handleRunAction('compress')}
+                  >
+                    <Zap size={15} style={{ color: '#60a5fa', marginTop: 2, flexShrink: 0 }} />
+                    <div>
+                      <span className="export-dropdown-item-title">Compressed Export ({codec.toUpperCase()})</span>
+                      <span className="export-dropdown-item-desc">Apply CQ quality factor or target file size</span>
+                    </div>
+                  </button>
+                </div>
               )}
-            </button>
+            </div>
           )}
 
           <button
@@ -883,6 +923,59 @@ export default function App() {
 
       {/* 2. MAIN WORKSPACE BODY */}
       <div className="nle-workspace-body">
+        {/* Left Activity Rail (CapCut / Premiere Pro style) */}
+        <nav className="nle-left-rail" aria-label="Editor Tools">
+          <button
+            type="button"
+            className={`rail-btn ${activeToolTab === 'enhance' ? 'active' : ''}`}
+            onClick={() => { setActiveToolTab('enhance'); setIsInspectorOpen(true); }}
+            title="AI Cinema Enhancer"
+          >
+            <Sparkles size={17} />
+            <span>Enhance</span>
+          </button>
+
+          <button
+            type="button"
+            className={`rail-btn ${activeToolTab === 'compress' ? 'active' : ''}`}
+            onClick={() => { setActiveToolTab('compress'); setIsInspectorOpen(true); }}
+            title="Compression & Presets"
+          >
+            <Zap size={17} />
+            <span>Compress</span>
+          </button>
+
+          <button
+            type="button"
+            className={`rail-btn ${activeToolTab === 'cut' ? 'active green' : ''}`}
+            onClick={() => { setActiveToolTab('cut'); setIsInspectorOpen(true); }}
+            title="Cut & Multi-Clip Segments"
+          >
+            <Scissors size={17} />
+            <span>Cut</span>
+          </button>
+
+          <button
+            type="button"
+            className={`rail-btn ${activeToolTab === 'audio' ? 'active' : ''}`}
+            onClick={() => { setActiveToolTab('audio'); setIsInspectorOpen(true); }}
+            title="Audio Track Settings"
+          >
+            <Volume2 size={17} />
+            <span>Audio</span>
+          </button>
+
+          <button
+            type="button"
+            className={`rail-btn ${activeToolTab === 'media' ? 'active' : ''}`}
+            onClick={() => { setActiveToolTab('media'); setIsInspectorOpen(true); }}
+            title="Project Media Asset"
+          >
+            <Film size={17} />
+            <span>Media</span>
+          </button>
+        </nav>
+
         {/* Center Stage Viewport */}
         <div className="nle-center-stage">
           <div
@@ -1126,7 +1219,11 @@ export default function App() {
           <aside className="nle-inspector-panel">
             <div className="inspector-header">
               <span className="inspector-title">
-                {workflowMode === 'lossless' ? 'Cut Settings' : 'Compress Settings'}
+                {activeToolTab === 'enhance' && 'AI Cinema Enhancer'}
+                {activeToolTab === 'compress' && 'Compression Suite'}
+                {activeToolTab === 'cut' && 'Cut & Segments'}
+                {activeToolTab === 'audio' && 'Audio Track'}
+                {activeToolTab === 'media' && 'Project Media'}
               </span>
               <button
                 type="button"
@@ -1138,73 +1235,162 @@ export default function App() {
               </button>
             </div>
 
-            <div className="inspector-scroll-body">
-              {workflowMode === 'lossless' ? (
-                <>
-                  <div className="inspector-group">
-                    <div className="inspector-group-title">
-                      <span>Multi-Clip Export</span>
-                      <span className="val">{segments.length} Clips</span>
-                    </div>
-                    <div className="segmented-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
-                      <button
-                        type="button"
-                        className={`seg-btn ${!mergeSegments ? 'active-green' : ''}`}
-                        onClick={() => setMergeSegments(false)}
-                      >
-                        Separate Files
-                      </button>
-                      <button
-                        type="button"
-                        className={`seg-btn ${mergeSegments ? 'active-green' : ''}`}
-                        onClick={() => setMergeSegments(true)}
-                      >
-                        Merge Clips
-                      </button>
-                    </div>
-                  </div>
+            {/* Inspector Tab Strip */}
+            <div className="inspector-tab-strip">
+              <button
+                type="button"
+                className={`insp-tab-btn ${activeToolTab === 'enhance' ? 'active blue' : ''}`}
+                onClick={() => setActiveToolTab('enhance')}
+              >
+                <Sparkles size={11} /> Enhance
+              </button>
+              <button
+                type="button"
+                className={`insp-tab-btn ${activeToolTab === 'compress' ? 'active blue' : ''}`}
+                onClick={() => setActiveToolTab('compress')}
+              >
+                <Zap size={11} /> Compress
+              </button>
+              <button
+                type="button"
+                className={`insp-tab-btn ${activeToolTab === 'cut' ? 'active green' : ''}`}
+                onClick={() => setActiveToolTab('cut')}
+              >
+                <Scissors size={11} /> Cut
+              </button>
+              <button
+                type="button"
+                className={`insp-tab-btn ${activeToolTab === 'audio' ? 'active blue' : ''}`}
+                onClick={() => setActiveToolTab('audio')}
+              >
+                <Volume2 size={11} /> Audio
+              </button>
+              <button
+                type="button"
+                className={`insp-tab-btn ${activeToolTab === 'media' ? 'active' : ''}`}
+                onClick={() => setActiveToolTab('media')}
+              >
+                <Film size={11} /> Media
+              </button>
+            </div>
 
-                  <div className="inspector-group">
+                        <div className="inspector-scroll-body">
+              {/* TAB 1: AI CINEMA ENHANCER */}
+              {activeToolTab === 'enhance' && (
+                <>
+                  <div className="cinema-enhancement-card">
                     <div className="inspector-group-title">
-                      <span>Audio Track</span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#38bdf8' }}>
+                        <Sparkles size={13} />
+                        AI Super-Resolution
+                      </span>
+                      {isUpscaling && (
+                        <span className="enhancer-badge">
+                          {scaleMultiplier}× Super-Res
+                        </span>
+                      )}
                     </div>
-                    <div className="segmented-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
-                      <button
-                        type="button"
-                        className={`seg-btn ${!losslessStripAudio ? 'active-green' : ''}`}
-                        onClick={() => setLosslessStripAudio(false)}
+
+                    <div style={{ marginTop: 8 }}>
+                      <label style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
+                        Target Cinema Resolution
+                      </label>
+                      <select
+                        className="select-control"
+                        value={resolutionPreset}
+                        onChange={(e) => setResolutionPreset(e.target.value)}
                       >
-                        Keep Audio
-                      </button>
-                      <button
-                        type="button"
-                        className={`seg-btn ${losslessStripAudio ? 'active-green' : ''}`}
-                        onClick={() => setLosslessStripAudio(true)}
-                      >
-                        Strip (Mute)
-                      </button>
+                        <option value="original">Original ({meta.width}×{meta.height})</option>
+                        <option value="2160">AI Cinema 4K UHD (2160p)</option>
+                        <option value="1440">Enhanced 2K QHD (1440p)</option>
+                        <option value="1080">Enhanced 1080p FHD</option>
+                        <option value="720">720p HD</option>
+                        <option value="480">480p SD</option>
+                      </select>
                     </div>
+
+                    <div style={{ marginTop: 10 }}>
+                      <div className="segmented-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
+                        <button
+                          type="button"
+                          className={"seg-btn " + (enhanceMode === 'cinema' ? 'active-blue' : '')}
+                          onClick={() => setEnhanceMode('cinema')}
+                        >
+                          Cinema Anti-Plastic
+                        </button>
+                        <button
+                          type="button"
+                          className={"seg-btn " + (enhanceMode === 'standard' ? 'active-blue' : '')}
+                          onClick={() => setEnhanceMode('standard')}
+                        >
+                          Standard Lanczos
+                        </button>
+                      </div>
+                    </div>
+
+                    {enhanceMode === 'cinema' && (
+                      <div className="enhancer-subpanel" style={{ marginTop: 10 }}>
+                        <label className="enhancer-toggle-row">
+                          <div className="enhancer-label-text">
+                            <strong>Organic Texture Guard</strong>
+                            <span>Injects temporal sensor grain to stop plastic wax look</span>
+                          </div>
+                          <input
+                            type="checkbox"
+                            checked={antiPlasticGrain}
+                            onChange={(e) => setAntiPlasticGrain(e.target.checked)}
+                          />
+                        </label>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-secondary)' }}>
+                            <span>Contrast-Adaptive Sharpen (CAS)</span>
+                            <span style={{ fontFamily: 'var(--font-mono)', color: '#38bdf8' }}>
+                              {Math.round(casStrength * 100)}%
+                            </span>
+                          </div>
+                          <input
+                            type="range"
+                            min="0"
+                            max="1"
+                            step="0.05"
+                            className="slider-control"
+                            value={casStrength}
+                            onChange={(e) => setCasStrength(Number(e.target.value))}
+                          />
+                        </div>
+
+                        <div className="enhancer-pipeline-info">
+                          Temporal Deblock • AMD CAS • Sinc Lanczos-4 • NVENC p7
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="size-preview-card">
                     <div className="size-row">
-                      <span style={{ color: 'var(--text-secondary)' }}>Selected Duration</span>
-                      <span className="size-val">{formatTimecode(selectedDuration)}</span>
+                      <span style={{ color: 'var(--text-secondary)' }}>Hardware Engine</span>
+                      <span className="size-val" style={{ color: '#38bdf8' }}>
+                        {nvencAvailable ? 'NVIDIA NVENC (RTX 4050)' : 'WebCodecs GPU'}
+                      </span>
+                    </div>
+                    <div className="size-row">
+                      <span style={{ color: 'var(--text-secondary)' }}>Target Canvas</span>
+                      <span className="size-val">{targetDims.width}×{targetDims.height}</span>
                     </div>
                     <div className="size-row">
                       <span style={{ color: 'var(--text-secondary)' }}>Estimated Size</span>
-                      <span className="size-val" style={{ color: '#34d399' }}>
+                      <span className="size-val" style={{ color: '#38bdf8' }}>
                         {formatBytes(activeOutputBytes)}
                       </span>
                     </div>
-                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                      Instant stream copy (-c copy). No transcoding or quality loss.
-                    </div>
                   </div>
                 </>
-              ) : (
+              )}
+
+              {/* TAB 2: COMPRESSION & PRESETS */}
+              {activeToolTab === 'compress' && (
                 <>
-                  {/* Quick Presets */}
                   <div className="inspector-group">
                     <div className="inspector-group-title">
                       <span>Quick Presets</span>
@@ -1212,7 +1398,7 @@ export default function App() {
                     <div className="preset-chips-grid">
                       <button
                         type="button"
-                        className={`preset-chip-card ${activeQuickPreset === 'best' ? 'active' : ''}`}
+                        className={"preset-chip-card " + (activeQuickPreset === 'best' ? 'active' : '')}
                         onClick={() => applyQuickPreset('best')}
                       >
                         <div className="chip-title-row">
@@ -1223,7 +1409,7 @@ export default function App() {
                       </button>
                       <button
                         type="button"
-                        className={`preset-chip-card ${activeQuickPreset === 'discord' ? 'active' : ''}`}
+                        className={"preset-chip-card " + (activeQuickPreset === 'discord' ? 'active' : '')}
                         onClick={() => applyQuickPreset('discord')}
                       >
                         <div className="chip-title-row">
@@ -1234,7 +1420,7 @@ export default function App() {
                       </button>
                       <button
                         type="button"
-                        className={`preset-chip-card ${activeQuickPreset === 'web' ? 'active' : ''}`}
+                        className={"preset-chip-card " + (activeQuickPreset === 'web' ? 'active' : '')}
                         onClick={() => applyQuickPreset('web')}
                       >
                         <div className="chip-title-row">
@@ -1245,7 +1431,7 @@ export default function App() {
                       </button>
                       <button
                         type="button"
-                        className={`preset-chip-card ${activeQuickPreset === 'slim' ? 'active' : ''}`}
+                        className={"preset-chip-card " + (activeQuickPreset === 'slim' ? 'active' : '')}
                         onClick={() => applyQuickPreset('slim')}
                       >
                         <div className="chip-title-row">
@@ -1257,7 +1443,6 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Mode */}
                   <div className="inspector-group">
                     <div className="inspector-group-title">
                       <span>Compression Target</span>
@@ -1265,14 +1450,14 @@ export default function App() {
                     <div className="segmented-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
                       <button
                         type="button"
-                        className={`seg-btn ${rateControlMode === 'crf' ? 'active-blue' : ''}`}
+                        className={"seg-btn " + (rateControlMode === 'crf' ? 'active-blue' : '')}
                         onClick={() => setRateControlMode('crf')}
                       >
                         By Quality
                       </button>
                       <button
                         type="button"
-                        className={`seg-btn ${rateControlMode === 'size' ? 'active-blue' : ''}`}
+                        className={"seg-btn " + (rateControlMode === 'size' ? 'active-blue' : '')}
                         onClick={() => setRateControlMode('size')}
                       >
                         Target Size (MB)
@@ -1306,7 +1491,7 @@ export default function App() {
                           <button
                             key={q.val}
                             type="button"
-                            className={`seg-btn ${crf === q.val ? 'active-blue' : ''}`}
+                            className={"seg-btn " + (crf === q.val ? 'active-blue' : '')}
                             onClick={() => setCrf(q.val)}
                           >
                             {q.label}
@@ -1329,187 +1514,61 @@ export default function App() {
                         <span>Max Output Size</span>
                         <span className="val">{targetSizeMB} MB</span>
                       </div>
-                      <div className="segmented-grid">
-                        {[8, 10, 25, 50, 100].map((mb) => (
+                      <div className="segmented-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+                        {[8, 10, 25, 50].map((mb) => (
                           <button
                             key={mb}
                             type="button"
-                            className={`seg-btn ${Math.abs(targetSizeMB - mb) < 0.05 ? 'active-blue' : ''}`}
+                            className={"seg-btn " + (targetSizeMB === mb ? 'active-blue' : '')}
                             onClick={() => setTargetSizeMB(mb)}
                           >
                             {mb}MB
                           </button>
                         ))}
                       </div>
-                      <div className="input-row">
-                        <input
-                          type="range"
-                          min="10"
-                          max="90"
-                          step="5"
-                          className="slider-control"
-                          value={targetSizePct}
-                          onChange={(e) => {
-                            const pct = Number(e.target.value);
-                            setTargetSizePct(pct);
-                            if (meta.size > 0) {
-                              const origMB = meta.size / (1024 * 1024);
-                              setTargetSizeMB(Math.max(0.2, Number(((origMB * pct) / 100).toFixed(2))));
-                            }
-                          }}
-                        />
-                        <input
-                          type="number"
-                          min="0.2"
-                          max="2000"
-                          step="0.5"
-                          className="text-input"
-                          style={{ width: 80, textAlign: 'right' }}
-                          value={targetSizeMB}
-                          onChange={(e) => setTargetSizeMB(Math.max(0.2, Number(e.target.value) || 1))}
-                        />
-                      </div>
+                      <input
+                        type="range"
+                        min="1"
+                        max="200"
+                        step="1"
+                        className="slider-control"
+                        value={targetSizeMB}
+                        onChange={(e) => setTargetSizeMB(Number(e.target.value))}
+                      />
                     </div>
                   )}
 
-                  {/* Resolution & FPS */}
                   <div className="inspector-group">
                     <div className="inspector-group-title">
-                      <span>Resolution &amp; FPS</span>
-                      <span className="val">
-                        {targetDims.width}×{targetDims.height}
-                      </span>
+                      <span>Resolution &amp; Framerate</span>
+                      <span className="val">{targetDims.width}×{targetDims.height}</span>
                     </div>
-                    <div className="input-row">
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                       <select
-                        className="select-input"
+                        className="select-control"
                         value={resolutionPreset}
                         onChange={(e) => setResolutionPreset(e.target.value)}
                       >
                         <option value="original">Original ({meta.width}×{meta.height})</option>
-                        <option value="2160">AI Cinema 4K UHD (2160p)</option>
-                        <option value="1440">Enhanced 2K QHD (1440p)</option>
+                        <option value="2160">AI Cinema 4K UHD</option>
+                        <option value="1440">Enhanced 2K QHD</option>
                         <option value="1080">Enhanced 1080p FHD</option>
                         <option value="720">720p HD</option>
                         <option value="480">480p SD</option>
                       </select>
                       <select
-                        className="select-input"
-                        style={{ width: 110 }}
+                        className="select-control"
                         value={fpsPreset}
                         onChange={(e) => setFpsPreset(e.target.value)}
                       >
                         <option value="original">Same FPS</option>
-                        <option value="60">60 fps</option>
-                        <option value="30">30 fps</option>
-                        <option value="24">24 fps</option>
+                        <option value="60">60 FPS</option>
+                        <option value="30">30 FPS</option>
+                        <option value="24">24 FPS</option>
                       </select>
                     </div>
                   </div>
 
-                  {/* AI Cinema Enhancement Suite (Anti-Plastic Super-Resolution) */}
-                  <div className="inspector-group cinema-enhancement-card">
-                    <div className="inspector-group-title">
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#38bdf8' }}>
-                        <Sparkles size={13} />
-                        AI Cinema Enhancer
-                      </span>
-                      {isUpscaling && (
-                        <span className="enhancer-badge">
-                          {scaleMultiplier}× Super-Res
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="segmented-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
-                      <button
-                        type="button"
-                        className={`seg-btn ${enhanceMode === 'cinema' ? 'active-blue' : ''}`}
-                        onClick={() => setEnhanceMode('cinema')}
-                      >
-                        Cinema Anti-Plastic
-                      </button>
-                      <button
-                        type="button"
-                        className={`seg-btn ${enhanceMode === 'standard' ? 'active-blue' : ''}`}
-                        onClick={() => setEnhanceMode('standard')}
-                      >
-                        Standard
-                      </button>
-                    </div>
-
-                    {enhanceMode === 'cinema' && (
-                      <div className="enhancer-subpanel">
-                        {/* Anti-Plastic Organic Texture Guard */}
-                        <label className="enhancer-toggle-row">
-                          <div className="enhancer-label-text">
-                            <strong>Organic Texture Guard</strong>
-                            <span>Injects fine sensor grain to stop plastic wax look</span>
-                          </div>
-                          <input
-                            type="checkbox"
-                            checked={antiPlasticGrain}
-                            onChange={(e) => setAntiPlasticGrain(e.target.checked)}
-                          />
-                        </label>
-
-                        {/* AMD FidelityFX CAS Sharpness */}
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-secondary)' }}>
-                            <span>Contrast-Adaptive Sharpen (CAS)</span>
-                            <span style={{ fontFamily: 'var(--font-mono)', color: '#38bdf8' }}>
-                              {Math.round(casStrength * 100)}%
-                            </span>
-                          </div>
-                          <input
-                            type="range"
-                            min="0"
-                            max="1"
-                            step="0.05"
-                            className="slider-control"
-                            value={casStrength}
-                            onChange={(e) => setCasStrength(Number(e.target.value))}
-                          />
-                        </div>
-
-                        <div className="enhancer-pipeline-info">
-                          Temporal Deblock • AMD CAS • Sinc Lanczos-4
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Audio */}
-                  <div className="inspector-group">
-                    <div className="inspector-group-title">
-                      <span>Audio</span>
-                    </div>
-                    <div className="segmented-grid" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
-                      <button
-                        type="button"
-                        className={`seg-btn ${audioMode === 'copy' ? 'active-blue' : ''}`}
-                        onClick={() => setAudioMode('copy')}
-                      >
-                        Copy
-                      </button>
-                      <button
-                        type="button"
-                        className={`seg-btn ${audioMode === 'aac' ? 'active-blue' : ''}`}
-                        onClick={() => setAudioMode('aac')}
-                      >
-                        AAC
-                      </button>
-                      <button
-                        type="button"
-                        className={`seg-btn ${audioMode === 'strip' ? 'active-blue' : ''}`}
-                        onClick={() => setAudioMode('strip')}
-                      >
-                        Mute
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Hardware Pro Settings Accordion */}
                   <div className="accordion-wrapper">
                     <button
                       type="button"
@@ -1532,7 +1591,7 @@ export default function App() {
                             <button
                               key={c}
                               type="button"
-                              className={`seg-btn ${codec === c ? 'active-blue' : ''}`}
+                              className={"seg-btn " + (codec === c ? 'active-blue' : '')}
                               onClick={() => setCodec(c)}
                             >
                               {c.toUpperCase()}
@@ -1560,40 +1619,286 @@ export default function App() {
                     )}
                   </div>
 
-                  {/* Size Preview Card */}
                   <div className="size-preview-card">
                     <div className="size-row">
                       <span style={{ color: 'var(--text-secondary)' }}>Source Size</span>
                       <span className="size-val">{videoFile ? formatBytes(meta.size) : '—'}</span>
                     </div>
                     <div className="size-row">
-                      <span style={{ color: 'var(--text-secondary)' }}>
-                        {outputResult?.primary ? 'Final Size' : 'Estimated'}
+                      <span style={{ color: 'var(--text-secondary)' }}>Estimated Output</span>
+                      <span className="size-val" style={{ color: '#38bdf8' }}>
+                        {videoFile ? formatBytes(activeOutputBytes) : '—'}
                       </span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span className="size-val" style={{ color: '#38bdf8' }}>
-                          {videoFile ? formatBytes(activeOutputBytes) : '—'}
-                        </span>
-                        {videoFile && savingsPct > 0 && (
-                          <span className="savings-tag">-{savingsPct}%</span>
-                        )}
-                      </div>
                     </div>
-                    {videoFile && (
-                      <div className="size-bar-track">
-                        <div
-                          className="size-bar-fill"
-                          style={{
-                            width: `${Math.max(6, Math.min(100, Math.round((activeOutputBytes / meta.size) * 100)))}%`,
-                          }}
-                        />
-                      </div>
-                    )}
                   </div>
                 </>
               )}
 
-              {/* Output Done Card in Scroll Body if needed */}
+              {/* TAB 3: CUT & SEGMENTS */}
+              {activeToolTab === 'cut' && (
+                <>
+                  <div className="inspector-group">
+                    <div className="inspector-group-title">
+                      <span>Timeline Clips</span>
+                      <span className="val">{segments.length} Segments</span>
+                    </div>
+
+                    <div className="segment-list-container">
+                      {segments.map((seg, idx) => {
+                        const isActive = seg.id === activeSegId;
+                        const duration = Math.max(0, seg.end - seg.start);
+                        return (
+                          <div
+                            key={seg.id}
+                            className={"segment-item-card " + (isActive ? 'active' : '')}
+                            onClick={() => {
+                              setActiveSegId(seg.id);
+                              setCurrentTime(seg.start);
+                              if (videoRef.current) videoRef.current.currentTime = seg.start;
+                            }}
+                          >
+                            <div>
+                              <div className="segment-item-title">{seg.label || ("Clip " + (idx + 1))}</div>
+                              <div className="segment-item-time">
+                                {formatTimecode(seg.start)} → {formatTimecode(seg.end)} ({duration.toFixed(1)}s)
+                              </div>
+                            </div>
+                            {segments.length > 1 && (
+                              <button
+                                type="button"
+                                className="btn btn-icon btn-ghost btn-sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSegments((prev) => prev.filter((s) => s.id !== seg.id));
+                                  if (activeSegId === seg.id) {
+                                    const rem = segments.filter((s) => s.id !== seg.id);
+                                    if (rem.length) setActiveSegId(rem[0].id);
+                                  }
+                                }}
+                                title="Delete Segment"
+                              >
+                                <Trash2 size={12} style={{ color: '#f87171' }} />
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-ghost"
+                      style={{ width: '100%', marginTop: 4 }}
+                      onClick={addNewSegment}
+                      disabled={!videoFile}
+                    >
+                      <Plus size={13} /> Add Clip Segment
+                    </button>
+                  </div>
+
+                  <div className="inspector-group">
+                    <div className="inspector-group-title">
+                      <span>Export Mode</span>
+                    </div>
+                    <div className="segmented-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
+                      <button
+                        type="button"
+                        className={"seg-btn " + (!mergeSegments ? 'active-green' : '')}
+                        onClick={() => setMergeSegments(false)}
+                      >
+                        Separate Files
+                      </button>
+                      <button
+                        type="button"
+                        className={"seg-btn " + (mergeSegments ? 'active-green' : '')}
+                        onClick={() => setMergeSegments(true)}
+                      >
+                        Merge Clips
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="inspector-group">
+                    <div className="inspector-group-title">
+                      <span>Audio Track</span>
+                    </div>
+                    <div className="segmented-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
+                      <button
+                        type="button"
+                        className={"seg-btn " + (!losslessStripAudio ? 'active-green' : '')}
+                        onClick={() => setLosslessStripAudio(false)}
+                      >
+                        Keep Audio
+                      </button>
+                      <button
+                        type="button"
+                        className={"seg-btn " + (losslessStripAudio ? 'active-green' : '')}
+                        onClick={() => setLosslessStripAudio(true)}
+                      >
+                        Strip (Mute)
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="size-preview-card">
+                    <div className="size-row">
+                      <span style={{ color: 'var(--text-secondary)' }}>Selected Duration</span>
+                      <span className="size-val">{formatTimecode(selectedDuration)}</span>
+                    </div>
+                    <div className="size-row">
+                      <span style={{ color: 'var(--text-secondary)' }}>Estimated Size</span>
+                      <span className="size-val" style={{ color: '#34d399' }}>
+                        {formatBytes(activeOutputBytes)}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                      Instant stream copy (-c copy). No transcoding or quality loss.
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* TAB 4: AUDIO */}
+              {activeToolTab === 'audio' && (
+                <>
+                  <div className="inspector-group">
+                    <div className="inspector-group-title">
+                      <span>Audio Processing</span>
+                    </div>
+                    <div className="segmented-grid" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
+                      <button
+                        type="button"
+                        className={"seg-btn " + (audioMode === 'copy' ? 'active-blue' : '')}
+                        onClick={() => setAudioMode('copy')}
+                      >
+                        Copy
+                      </button>
+                      <button
+                        type="button"
+                        className={"seg-btn " + (audioMode === 'aac' ? 'active-blue' : '')}
+                        onClick={() => setAudioMode('aac')}
+                      >
+                        AAC
+                      </button>
+                      <button
+                        type="button"
+                        className={"seg-btn " + (audioMode === 'strip' ? 'active-blue' : '')}
+                        onClick={() => setAudioMode('strip')}
+                      >
+                        Mute
+                      </button>
+                    </div>
+                  </div>
+
+                  {audioMode === 'aac' && (
+                    <div className="inspector-group">
+                      <div className="inspector-group-title">
+                        <span>AAC Audio Bitrate</span>
+                        <span className="val">{audioBitrateKbps} kbps</span>
+                      </div>
+                      <div className="segmented-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+                        {[128, 160, 192, 256].map((kbps) => (
+                          <button
+                            key={kbps}
+                            type="button"
+                            className={"seg-btn " + (audioBitrateKbps === kbps ? 'active-blue' : '')}
+                            onClick={() => setAudioBitrateKbps(kbps)}
+                          >
+                            {kbps}k
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="size-preview-card">
+                    <div className="size-row">
+                      <span style={{ color: 'var(--text-secondary)' }}>Audio Status</span>
+                      <span className="size-val" style={{ color: audioMode === 'strip' ? '#f87171' : '#34d399' }}>
+                        {audioMode === 'strip' ? 'Stripped / Muted' : audioMode === 'copy' ? 'Direct Stream Copy' : ('AAC ' + audioBitrateKbps + ' kbps')}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                      Preserve original multichannel audio or re-encode to high-efficiency AAC stereo.
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* TAB 5: MEDIA */}
+              {activeToolTab === 'media' && (
+                <>
+                  <div className="inspector-group">
+                    <div className="inspector-group-title">
+                      <span>File Information</span>
+                    </div>
+                    <div className="size-preview-card" style={{ gap: 8 }}>
+                      <div className="size-row">
+                        <span style={{ color: 'var(--text-secondary)' }}>File Name</span>
+                        <span className="size-val" style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {meta.name || '—'}
+                        </span>
+                      </div>
+                      <div className="size-row">
+                        <span style={{ color: 'var(--text-secondary)' }}>File Size</span>
+                        <span className="size-val">{videoFile ? formatBytes(meta.size) : '—'}</span>
+                      </div>
+                      <div className="size-row">
+                        <span style={{ color: 'var(--text-secondary)' }}>Resolution</span>
+                        <span className="size-val">{meta.width ? (meta.width + '×' + meta.height) : '—'}</span>
+                      </div>
+                      <div className="size-row">
+                        <span style={{ color: 'var(--text-secondary)' }}>Duration</span>
+                        <span className="size-val">{meta.duration ? formatTimecode(meta.duration) : '—'}</span>
+                      </div>
+                      <div className="size-row">
+                        <span style={{ color: 'var(--text-secondary)' }}>Container</span>
+                        <span className="size-val" style={{ textTransform: 'uppercase' }}>
+                          {(meta.name || '').split('.').pop() || 'MP4'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="inspector-group">
+                    <div className="inspector-group-title">
+                      <span>Acceleration Engine</span>
+                    </div>
+                    <div className="size-preview-card">
+                      <div className="size-row">
+                        <span style={{ color: 'var(--text-secondary)' }}>Device GPU</span>
+                        <span className="size-val" style={{ color: '#34d399' }}>
+                          {nvencAvailable ? 'NVIDIA RTX 4050' : 'Integrated GPU'}
+                        </span>
+                      </div>
+                      <div className="size-row">
+                        <span style={{ color: 'var(--text-secondary)' }}>NVENC Status</span>
+                        <span className="size-val" style={{ color: nvencAvailable ? '#34d399' : 'var(--text-muted)' }}>
+                          {nvencAvailable ? 'Active (Ada Lovelace p7)' : 'Offline'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <Upload size={13} /> Replace Video File
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      onClick={handleLoadDemo}
+                      disabled={isGeneratingDemo || isProcessing}
+                    >
+                      <Sparkles size={13} style={{ color: '#38bdf8' }} /> Try 1080p Studio Demo
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Inspector Footer CTA */}
@@ -1630,23 +1935,27 @@ export default function App() {
                 ) : (
                   <button
                     type="button"
-                    className={`btn ${workflowMode === 'lossless' ? 'btn-green' : 'btn-primary'}`}
+                    className={"btn " + (activeToolTab === 'cut' ? 'btn-green' : 'btn-primary')}
                     style={{ width: '100%', padding: '10px 14px' }}
                     disabled={isProcessing}
-                    onClick={handleRunAction}
+                    onClick={() => handleRunAction()}
                   >
                     {isProcessing ? (
                       <>
                         Encoding... {Math.round(progress * 100)}%
-                        {encodingStats.fps > 0 ? ` (${encodingStats.fps} fps)` : ''}
+                        {encodingStats.fps > 0 ? (" (" + encodingStats.fps + " fps)") : ''}
                       </>
-                    ) : workflowMode === 'lossless' ? (
+                    ) : activeToolTab === 'cut' ? (
                       <>
-                        <Scissors size={14} /> Export Lossless Cut
+                        <Scissors size={14} /> Export Lossless Cut (0.2s)
+                      </>
+                    ) : activeToolTab === 'enhance' ? (
+                      <>
+                        <Sparkles size={14} /> Export AI Cinema ({resolutionPreset === 'original' ? 'Original' : resolutionPreset === '2160' ? '4K UHD' : resolutionPreset === '1440' ? '2K QHD' : resolutionPreset + 'p'})
                       </>
                     ) : (
                       <>
-                        <Zap size={14} /> Compress ({codec.toUpperCase()})
+                        <Zap size={14} /> Compress Video ({codec.toUpperCase()})
                       </>
                     )}
                   </button>

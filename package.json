@@ -13,6 +13,7 @@
     "@ffmpeg/core": "^0.12.6",
     "@ffmpeg/ffmpeg": "^0.12.10",
     "@ffmpeg/util": "^0.12.1",
+    "gsap": "^3.15.0",
     "lucide-react": "^0.460.0",
     "mediabunny": "^1.61.3",
     "mp4-muxer": "^5.1.3",

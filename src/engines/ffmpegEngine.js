@@ -54,13 +54,15 @@ export async function losslessSplitOrTrim({
   segments,
   mergeSegments = false,
   stripAudio = false,
+  compressCut = false,
+  codec = 'h264',
   onProgress,
   onLog,
 }) {
   const startWall = performance.now();
   const ffmpeg = await getFFmpeg({ onLog, onProgress });
   const ext = getSafeExtension(file.name);
-  const outExt = ['mp4', 'mov', 'mkv', 'webm'].includes(ext) ? ext : 'mp4';
+  const outExt = compressCut ? 'mp4' : (['mp4', 'mov', 'mkv', 'webm'].includes(ext) ? ext : 'mp4');
   const inputName = `input_lossless.${ext}`;
 
   if (onLog) onLog(`Mounting ${file.name} into WASM memory...`);
@@ -80,21 +82,42 @@ export async function losslessSplitOrTrim({
       formatFfmpegTime(seg.end),
       '-i',
       inputName,
-      '-map',
-      '0:v:0',
     ];
 
-    if (stripAudio) {
-      args.push('-an');
+    if (compressCut) {
+      args.push(
+        '-c:v',
+        'libx264',
+        '-preset',
+        'ultrafast',
+        '-crf',
+        '24',
+        '-pix_fmt',
+        'yuv420p'
+      );
+      if (stripAudio) {
+        args.push('-an');
+      } else {
+        args.push('-c:a', 'aac', '-b:a', '128k');
+      }
     } else {
-      args.push('-map', '0:a?');
+      args.push('-map', '0:v:0');
+      if (stripAudio) {
+        args.push('-an');
+      } else {
+        args.push('-map', '0:a?');
+      }
+      args.push(
+        '-c',
+        'copy',
+        '-avoid_negative_ts',
+        'make_zero'
+      );
     }
 
     args.push(
-      '-c',
-      'copy',
-      '-avoid_negative_ts',
-      'make_zero',
+      '-map_metadata',
+      '-1',
       '-movflags',
       '+faststart',
       segFilename
@@ -102,9 +125,9 @@ export async function losslessSplitOrTrim({
 
     if (onLog) {
       onLog(
-        `Lossless cutting Segment #${i + 1} [${formatFfmpegTime(seg.start)}s -> ${formatFfmpegTime(
+        `${compressCut ? 'Compress' : 'Lossless'} cutting Segment #${i + 1} [${formatFfmpegTime(seg.start)}s -> ${formatFfmpegTime(
           seg.end
-        )}s] (-c copy)...`
+        )}s]...`
       );
     }
 
@@ -351,7 +374,7 @@ export async function wasmCompressVideo({
     args.push('-c:a', 'aac', '-b:a', `${audioBitrateKbps}k`);
   }
 
-  args.push('-movflags', '+faststart', outputName);
+  args.push('-map_metadata', '-1', '-movflags', '+faststart', outputName);
 
   if (onLog) onLog(`Running FFmpeg.wasm: ffmpeg ${args.join(' ')}`);
   await ffmpeg.exec(args);
@@ -379,5 +402,120 @@ export async function wasmCompressVideo({
     segments: [],
     elapsedSec,
     engineUsed: 'FFmpeg.wasm (libx264 ultrafast)',
+  };
+}
+
+/**
+ * Pure-browser client-side Cinema Super-Resolution & Enhancer (Runs on ANY live deployed web host)
+ */
+export async function wasmUpscaleVideo({
+  file,
+  startTime,
+  endTime,
+  width,
+  height,
+  fps = 'original',
+  casStrength = 0.65,
+  antiPlasticGrain = true,
+  onProgress,
+  onLog,
+}) {
+  const startWall = performance.now();
+  const clipDuration = Math.max(0.5, endTime - startTime);
+
+  const ffmpeg = await getFFmpeg({
+    onLog,
+    onProgress: ({ time }) => {
+      if (onProgress && time > 0) {
+        const currentSec = time / 1_000_000;
+        const pct = Math.min(0.99, Math.max(0.01, currentSec / clipDuration));
+        onProgress({ progress: pct });
+      }
+    },
+  });
+
+  const ext = getSafeExtension(file.name);
+  const inputName = `input_upscale_${Date.now()}.${ext}`;
+  const outputName = `upscale_out_${Date.now()}.mp4`;
+
+  if (onLog) onLog(`Loading ${file.name} into in-browser Super-Resolution Engine...`);
+  await ffmpeg.writeFile(inputName, await fetchFile(file));
+
+  const targetW = Math.max(2, Math.round(width / 2) * 2);
+  const targetH = Math.max(2, Math.round(height / 2) * 2);
+
+  // High-Fidelity Super-Resolution & Restoration Filter Chain:
+  // 1. Sinc Lanczos-4 scaling with subpixel rounding
+  // 2. High-precision luma unsharp mask (enhances edge contours without color halos)
+  // 3. Contrast restoration to eliminate washed-out 480p haze
+  // 4. Organic texture guard (removes plastic smoothing look)
+  const vfFilters = [];
+  if (targetW && targetH) {
+    vfFilters.push(`scale=${targetW}:${targetH}:flags=lanczos+accurate_rnd`);
+  }
+
+  const cleanCas = Math.max(0.2, Math.min(1.0, Number(casStrength) || 0.65));
+  const lumaSharpen = (0.9 + cleanCas * 0.9).toFixed(2);
+  vfFilters.push(`unsharp=5:5:${lumaSharpen}:5:5:0.0`);
+  vfFilters.push('eq=contrast=1.06:saturation=1.04');
+
+  if (antiPlasticGrain) {
+    vfFilters.push('noise=alls=1.5:allf=t+u');
+  }
+
+  if (fps && fps !== 'original') {
+    vfFilters.push(`fps=${fps}`);
+  }
+
+  const args = [
+    '-ss',
+    formatFfmpegTime(startTime),
+    '-to',
+    formatFfmpegTime(endTime),
+    '-i',
+    inputName,
+    '-vf',
+    vfFilters.join(','),
+    '-c:v',
+    'libx264',
+    '-preset',
+    'veryfast',
+    '-crf',
+    '14',
+    '-pix_fmt',
+    'yuv420p',
+    '-c:a',
+    'copy',
+    '-movflags',
+    '+faststart',
+    outputName,
+  ];
+
+  if (onLog) onLog(`Running in-browser Super-Resolution: ffmpeg ${args.join(' ')}`);
+  await ffmpeg.exec(args);
+
+  const data = await ffmpeg.readFile(outputName);
+  const blob = new Blob([data.buffer], { type: 'video/mp4' });
+
+  await ffmpeg.deleteFile(inputName).catch(() => {});
+  await ffmpeg.deleteFile(outputName).catch(() => {});
+
+  const elapsedSec = (performance.now() - startWall) / 1000;
+  const outputFilename = `${file.name.replace(/\.[^/.]+$/, '')}_${targetW}x${targetH}_enhanced.mp4`;
+
+  return {
+    primary: {
+      label: `Enhanced ${targetW}×${targetH} Master`,
+      start: startTime,
+      end: endTime,
+      duration: clipDuration,
+      blob,
+      url: URL.createObjectURL(blob),
+      size: blob.size,
+      filename: outputFilename,
+    },
+    segments: [],
+    elapsedSec,
+    engineUsed: 'In-Browser Super-Resolution Engine (Lanczos + Unsharp Masking)',
   };
 }

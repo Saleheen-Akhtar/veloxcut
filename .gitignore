@@ -14,3 +14,5 @@ dist-ssr/
 *.local
 .DS_Store
 Thumbs.db
+.agents/
+skills-lock.json

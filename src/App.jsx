@@ -41,10 +41,11 @@ import {
   estimateCrfFileSize,
 } from './utils/format';
 import { probeGpuEncoders } from './engines/gpuProbe';
-import { losslessSplitOrTrim, wasmCompressVideo } from './engines/ffmpegEngine';
+import { losslessSplitOrTrim, wasmCompressVideo, wasmUpscaleVideo } from './engines/ffmpegEngine';
 import { webcodecsGpuCompress } from './engines/webcodecsEngine';
 import { checkNativeNvencStatus, runNativeNvencJob } from './engines/nativeNvencEngine';
 import { generateDemoVideoFile } from './utils/demoVideoGenerator';
+import VeloxLandingShowcase from './components/VeloxLandingShowcase';
 
 // Precision vector brand glyph with glowing aperture
 function BrandLogo() {
@@ -76,6 +77,9 @@ function BrandLogo() {
 }
 
 export default function App() {
+  // Experience Mode: 'showcase' (Awwwards AIDA landing) | 'studio' (NLE Suite)
+  const [viewMode, setViewMode] = useState('showcase');
+
   // Video File & Metadata
   const [videoFile, setVideoFile] = useState(null);
   const [videoUrl, setVideoUrl] = useState('');
@@ -154,10 +158,11 @@ export default function App() {
   const [compressResolution, setCompressResolution] = useState('original'); // 'original' | '1080' | '720' | '480'
   const [compressFps, setCompressFps] = useState('original'); // 'original' | '60' | '30' | '24'
   const [compressRateMode, setCompressRateMode] = useState('crf'); // 'crf' | 'size'
-  const [compressCrf, setCompressCrf] = useState(20);
+  const [compressCrf, setCompressCrf] = useState(24);
   const [compressTargetMB, setCompressTargetMB] = useState(15);
-  const [compressCodec, setCompressCodec] = useState('hevc'); // 'hevc' | 'h264' | 'av1'
+  const [compressCodec, setCompressCodec] = useState('h264'); // 'hevc' | 'h264' | 'av1'
   const [compressPsychoVisual, setCompressPsychoVisual] = useState(true);
+  const [cutMode, setCutMode] = useState('lossless'); // 'lossless' | 'compress'
 
   // 5. Audio Processing Suite (Dedicated State)
   const [audioMode, setAudioMode] = useState('copy'); // 'copy' | 'aac' | 'strip'
@@ -188,10 +193,10 @@ export default function App() {
         if (nvenc?.available) {
           setNvencAvailable(true);
           setEngineType('nvenc');
-          setCompressCodec('hevc');
+          setCompressCodec('h264');
         } else if (caps.webcodecsAvailable) {
           setEngineType('webcodecs');
-          setCompressCodec(caps.codecs.hevc?.supported ? 'hevc' : 'h264');
+          setCompressCodec('h264');
         } else {
           setEngineType('wasm');
           setCompressCodec('h264');
@@ -289,36 +294,44 @@ export default function App() {
   const applyQuickPreset = (id) => {
     if (id === 'best') {
       setCompressRateMode('crf');
-      setCompressCrf(20);
-      setCompressCodec('hevc');
+      setCompressCrf(22);
+      setCompressCodec('h264');
       setCompressPsychoVisual(true);
       setCompressResolution('original');
       setCompressFps('original');
       setAudioMode('copy');
-      showToast('Preset: Auto Lossless (CQ 20)');
+      showToast('Preset: Auto Lossless (H.264 CQ 22)');
     } else if (id === 'discord') {
       setCompressRateMode('size');
       setCompressTargetMB(10);
-      setCompressCodec('hevc');
+      setCompressCodec('h264');
       setCompressPsychoVisual(true);
       setAudioMode('aac');
       setAudioBitrateKbps(128);
-      showToast('Preset: 10 MB Discord Limit');
+      showToast('Preset: 10 MB Discord Limit (H.264)');
     } else if (id === 'web') {
       setCompressRateMode('size');
       setCompressTargetMB(25);
-      setCompressCodec('hevc');
+      setCompressCodec('h264');
       setCompressPsychoVisual(true);
       setAudioMode('copy');
-      showToast('Preset: 25 MB Web Share');
+      showToast('Preset: 25 MB Web Share (H.264)');
+    } else if (id === 'grok') {
+      setCompressRateMode('size');
+      setCompressTargetMB(10);
+      setCompressCodec('h264');
+      setCompressPsychoVisual(true);
+      setAudioMode('strip');
+      setCompressResolution('original');
+      showToast('Preset: Grok & AI Safe (H.264 • Muted • Clean Metadata)');
     } else if (id === 'slim') {
       setCompressRateMode('crf');
-      setCompressCrf(25);
+      setCompressCrf(26);
       setCompressResolution('720');
-      setCompressCodec('hevc');
+      setCompressCodec('h264');
       setAudioMode('aac');
       setAudioBitrateKbps(128);
-      showToast('Preset: 720p Compact');
+      showToast('Preset: 720p Compact (H.264)');
     }
   };
 
@@ -427,6 +440,7 @@ export default function App() {
   const loadFile = useCallback(
     (file) => {
       if (!file) return;
+      setViewMode('studio');
       if (videoUrl) URL.revokeObjectURL(videoUrl);
 
       const url = URL.createObjectURL(file);
@@ -704,10 +718,13 @@ export default function App() {
           : 'compress');
 
       if (effectiveMode === 'lossless') {
+        const isCutCompress = activeToolTab === 'cut' && cutMode === 'compress';
         if (nvencAvailable) {
           const res = await runNativeNvencJob({
             file: videoFile,
-            workflowMode: 'lossless',
+            workflowMode: isCutCompress ? 'cut_compress' : 'lossless',
+            codec: compressCodec,
+            crf: compressCrf,
             segments,
             mergeSegments,
             losslessStripAudio,
@@ -723,6 +740,8 @@ export default function App() {
             segments,
             mergeSegments,
             stripAudio: losslessStripAudio,
+            compressCut: isCutCompress,
+            codec: compressCodec,
             onProgress: ({ progress: p }) => setProgress(p),
           });
           setOutputResult(res);
@@ -755,7 +774,27 @@ export default function App() {
           setOutputResult(res);
           setPreviewMode('split-wipe');
         } else {
-          throw new Error('AI Cinema Upscaling requires NVIDIA NVENC hardware acceleration.');
+          // In-Browser Client-Side Super-Resolution Engine (Runs on ANY live deployed web host)
+          showToast(`Enhancing video in-browser to ${upscaleDims.width}×${upscaleDims.height}...`);
+          const res = await wasmUpscaleVideo({
+            file: videoFile,
+            startTime: start,
+            endTime: end,
+            width: upscaleDims.width,
+            height: upscaleDims.height,
+            fps: upscaleFps,
+            casStrength: upscaleCasStrength,
+            antiPlasticGrain: upscaleAntiPlastic,
+            onProgress: ({ progress: p }) => {
+              setProgress(p);
+              setEncodingStats((prev) => ({ ...prev, speed: 'In-Browser DSP' }));
+            },
+            onLog: (msg) => {
+              console.log('[In-Browser Super-Resolution]', msg);
+            },
+          });
+          setOutputResult(res);
+          setPreviewMode('split-wipe');
         }
       } else if (engineType === 'nvenc' && nvencAvailable) {
         const res = await runNativeNvencJob({
@@ -848,12 +887,33 @@ export default function App() {
     document.body.removeChild(a);
   };
 
+  const triggerDownloadAll = (items) => {
+    if (!items || !items.length) return;
+    items.forEach((item, idx) => {
+      setTimeout(() => {
+        triggerDownload(item);
+      }, idx * 350);
+    });
+    showToast(`Downloading all ${items.length} clips...`);
+  };
+
+  if (viewMode === 'showcase') {
+    return (
+      <VeloxLandingShowcase
+        onLaunchStudio={() => setViewMode('studio')}
+        onLoadDemo={handleLoadDemo}
+        onDropFile={(file) => loadFile(file)}
+        nvencAvailable={nvencAvailable}
+      />
+    );
+  }
+
   return (
     <div className="nle-app-shell">
       {/* 1. TOP NAVBAR */}
       <header className="nle-topbar">
         <div className="topbar-left">
-          <div className="app-brand" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
+          <div className="app-brand" onClick={() => setViewMode('showcase')} style={{ cursor: 'pointer' }} title="Return to Overview Showcase">
             <BrandLogo />
             <div className="app-brand-title-group">
               <span className="app-brand-name">VELOX<span className="app-brand-accent">CUT</span></span>
@@ -906,6 +966,16 @@ export default function App() {
           <button
             type="button"
             className="btn btn-sm"
+            onClick={() => setViewMode('showcase')}
+            title="Switch to Product Showcase"
+          >
+            <Layers size={13} style={{ color: '#38bdf8' }} />
+            Showcase
+          </button>
+
+          <button
+            type="button"
+            className="btn btn-sm"
             onClick={handleLoadDemo}
             disabled={isGeneratingDemo || isProcessing}
           >
@@ -924,12 +994,13 @@ export default function App() {
           </button>
 
           {videoFile && (
-            <div className="topbar-export-wrapper">
+            <div className="topbar-export-wrapper" style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <button
                 type="button"
                 className={`btn btn-sm ${activeToolTab === 'cut' ? 'btn-green' : 'btn-primary'}`}
-                onClick={() => setShowExportMenu((v) => !v)}
+                onClick={() => handleRunAction()}
                 disabled={isProcessing}
+                title="Run active action"
               >
                 {isProcessing ? (
                   <>Encoding... {Math.round(progress * 100)}%</>
@@ -937,14 +1008,25 @@ export default function App() {
                   <>
                     <Download size={13} />
                     {activeToolTab === 'enhance' ? (
-                      <>AI 4K Upscale <ChevronDown size={12} /></>
+                      <>AI Cinema Upscale ({upscaleDims.width}×{upscaleDims.height})</>
                     ) : activeToolTab === 'cut' ? (
-                      <>Lossless Cut <ChevronDown size={12} /></>
+                      <>Export Lossless Cut</>
                     ) : (
-                      <>Export <ChevronDown size={12} /></>
+                      <>Export Video</>
                     )}
                   </>
                 )}
+              </button>
+
+              <button
+                type="button"
+                className={`btn btn-sm btn-icon ${activeToolTab === 'cut' ? 'btn-green' : 'btn-primary'}`}
+                onClick={() => setShowExportMenu((v) => !v)}
+                title="More Export Options"
+                disabled={isProcessing}
+                style={{ padding: '0 6px' }}
+              >
+                <ChevronDown size={12} />
               </button>
 
               {showExportMenu && !isProcessing && (
@@ -1522,6 +1604,17 @@ export default function App() {
                       </button>
                       <button
                         type="button"
+                        className={"preset-chip-card " + (activeQuickPreset === 'grok' ? 'active' : '')}
+                        onClick={() => applyQuickPreset('grok')}
+                      >
+                        <div className="chip-title-row">
+                          <ShieldCheck size={13} className="chip-icon" style={{ color: '#38bdf8' }} />
+                          <span className="chip-title">Grok / AI Safe</span>
+                        </div>
+                        <span className="chip-sub">H.264 • Clean Meta • Muted</span>
+                      </button>
+                      <button
+                        type="button"
                         className={"preset-chip-card " + (activeQuickPreset === 'web' ? 'active' : '')}
                         onClick={() => applyQuickPreset('web')}
                       >
@@ -1669,6 +1762,41 @@ export default function App() {
                     </div>
                   </div>
 
+                  <div className="inspector-group">
+                    <div className="inspector-group-title">
+                      <span>Video Codec</span>
+                      <span className="val" style={{ color: compressCodec === 'h264' ? '#38bdf8' : 'var(--text-muted)' }}>
+                        {compressCodec === 'h264' ? 'H.264 (Universal / Grok / Web)' : compressCodec === 'hevc' ? 'HEVC (H.265)' : 'AV1 (Compact)'}
+                      </span>
+                    </div>
+                    <div className="segmented-grid" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
+                      <button
+                        type="button"
+                        className={"seg-btn " + (compressCodec === 'h264' ? 'active-blue' : '')}
+                        onClick={() => setCompressCodec('h264')}
+                        title="Universal format supported on Grok, Twitter, Discord, WhatsApp, browsers, iPhones, and Premiere"
+                      >
+                        H.264 (Web/AI)
+                      </button>
+                      <button
+                        type="button"
+                        className={"seg-btn " + (compressCodec === 'hevc' ? 'active-blue' : '')}
+                        onClick={() => setCompressCodec('hevc')}
+                        title="H.265 high-efficiency compression (may not play in all web browsers)"
+                      >
+                        HEVC (H.265)
+                      </button>
+                      <button
+                        type="button"
+                        className={"seg-btn " + (compressCodec === 'av1' ? 'active-blue' : '')}
+                        onClick={() => setCompressCodec('av1')}
+                        title="Next-generation AV1 open codec"
+                      >
+                        AV1
+                      </button>
+                    </div>
+                  </div>
+
                   <div className="accordion-wrapper">
                     <button
                       type="button"
@@ -1677,28 +1805,15 @@ export default function App() {
                     >
                       <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <Cpu size={13} style={{ color: '#3b82f6' }} />
-                        Pro Codec Settings
+                        Pro Quality Enhancements
                       </span>
                       <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                        {compressCodec.toUpperCase()} {showProSettings ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                        {compressPsychoVisual ? '2-Pass AQ Active' : 'Standard'} {showProSettings ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
                       </span>
                     </button>
 
                     {showProSettings && (
                       <div className="accordion-content">
-                        <div className="segmented-grid" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
-                          {['hevc', 'h264', 'av1'].map((c) => (
-                            <button
-                              key={c}
-                              type="button"
-                              className={"seg-btn " + (compressCodec === c ? 'active-blue' : '')}
-                              onClick={() => setCompressCodec(c)}
-                            >
-                              {c.toUpperCase()}
-                            </button>
-                          ))}
-                        </div>
-
                         <label
                           style={{
                             display: 'flex',
@@ -1708,7 +1823,7 @@ export default function App() {
                             cursor: 'pointer',
                           }}
                         >
-                          <span>2-Pass Lookahead AQ</span>
+                          <span>2-Pass Lookahead AQ (Psycho-Visual)</span>
                           <input
                             type="checkbox"
                             checked={compressPsychoVisual}
@@ -1794,6 +1909,36 @@ export default function App() {
                     >
                       <Plus size={13} /> Add Clip Segment
                     </button>
+                  </div>
+
+                  <div className="inspector-group">
+                    <div className="inspector-group-title">
+                      <span>Encoding Mode</span>
+                      <span className="val" style={{ color: cutMode === 'compress' ? '#38bdf8' : '#34d399' }}>
+                        {cutMode === 'compress' ? 'Compress (H.264 Small Size)' : 'Instant Lossless (0.2s)'}
+                      </span>
+                    </div>
+                    <div className="segmented-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
+                      <button
+                        type="button"
+                        className={"seg-btn " + (cutMode === 'lossless' ? 'active-green' : '')}
+                        onClick={() => setCutMode('lossless')}
+                      >
+                        ⚡ Lossless (0.2s)
+                      </button>
+                      <button
+                        type="button"
+                        className={"seg-btn " + (cutMode === 'compress' ? 'active-green' : '')}
+                        onClick={() => setCutMode('compress')}
+                      >
+                        📦 Compress (H.264)
+                      </button>
+                    </div>
+                    <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '5px', lineHeight: 1.4 }}>
+                      {cutMode === 'lossless'
+                        ? 'Instant stream-copy without re-encoding (preserves 100% original quality, but retains full raw camera bitrate).'
+                        : 'Re-encodes cuts into lightweight H.264 files (perfect for Grok, Discord, and messaging).'}
+                    </p>
                   </div>
 
                   <div className="inspector-group">
@@ -2018,14 +2163,82 @@ export default function App() {
                         )}
                       </span>
                     </div>
-                    <button
-                      type="button"
-                      className="btn btn-green"
-                      style={{ width: '100%', padding: '10px 14px' }}
-                      onClick={() => triggerDownload(outputResult.primary)}
-                    >
-                      <Download size={14} /> Download {outputResult.primary.label || 'Output'} ({formatBytes(outputResult.primary.size)})
-                    </button>
+                    {outputResult.segments && outputResult.segments.length > 1 ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+                        {!mergeSegments ? (
+                          <button
+                            type="button"
+                            className="btn btn-green"
+                            style={{ width: '100%', padding: '10px 14px' }}
+                            onClick={() => triggerDownloadAll(outputResult.segments)}
+                          >
+                            <Download size={14} /> Download All {outputResult.segments.length} Clips (Batch)
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              className="btn btn-green"
+                              style={{ width: '100%', padding: '10px 14px' }}
+                              onClick={() => triggerDownload(outputResult.primary)}
+                            >
+                              <Download size={14} /> Download Merged Video ({formatBytes(outputResult.primary.size)})
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-sm"
+                              style={{ width: '100%', fontSize: '11.5px' }}
+                              onClick={() => triggerDownloadAll(outputResult.segments)}
+                            >
+                              <Download size={12} /> Download All {outputResult.segments.length} Separate Clips
+                            </button>
+                          </>
+                        )}
+
+                        <div style={{ maxHeight: '160px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 5, marginTop: 2 }}>
+                          {outputResult.segments.map((seg, idx) => (
+                            <div
+                              key={idx}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                padding: '6px 10px',
+                                background: 'rgba(255, 255, 255, 0.04)',
+                                border: '1px solid rgba(255, 255, 255, 0.08)',
+                                borderRadius: 6,
+                                fontSize: '11.5px',
+                              }}
+                            >
+                              <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginRight: 6 }}>
+                                <span style={{ fontWeight: 600 }}>{seg.label || `Clip ${idx + 1}`}</span>
+                                <span style={{ color: 'var(--text-muted)', marginLeft: 6 }}>
+                                  ({(seg.duration || 0).toFixed(1)}s • {formatBytes(seg.size)})
+                                </span>
+                              </div>
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-ghost"
+                                style={{ padding: '3px 8px', height: 'auto', fontSize: '11px', display: 'flex', alignItems: 'center', gap: 4 }}
+                                onClick={() => triggerDownload(seg)}
+                                title="Download this clip"
+                              >
+                                <Download size={11} /> Save
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn btn-green"
+                        style={{ width: '100%', padding: '10px 14px', marginTop: 8 }}
+                        onClick={() => triggerDownload(outputResult.primary)}
+                      >
+                        <Download size={14} /> Download {outputResult.primary.label || 'Output'} ({formatBytes(outputResult.primary.size)})
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="btn btn-ghost btn-sm"
@@ -2037,32 +2250,82 @@ export default function App() {
                     </button>
                   </div>
                 ) : (
-                  <button
-                    type="button"
-                    className={"btn " + (activeToolTab === 'cut' ? 'btn-green' : 'btn-primary')}
-                    style={{ width: '100%', padding: '10px 14px' }}
-                    disabled={isProcessing}
-                    onClick={() => handleRunAction()}
-                  >
-                    {isProcessing ? (
-                      <>
-                        Encoding... {Math.round(progress * 100)}%
-                        {encodingStats.fps > 0 ? (" (" + encodingStats.fps + " fps)") : ''}
-                      </>
-                    ) : activeToolTab === 'cut' ? (
-                      <>
-                        <Scissors size={14} /> Export Lossless Cut (0.2s)
-                      </>
-                    ) : activeToolTab === 'enhance' ? (
-                      <>
-                        <Sparkles size={14} /> AI Cinema Upscale ({upscaleDims.width}×{upscaleDims.height})
-                      </>
-                    ) : (
-                      <>
-                        <Zap size={14} /> Compress Video ({compressRateMode === 'size' ? `${compressTargetMB} MB` : `CQ ${compressCrf}`})
-                      </>
-                    )}
-                  </button>
+                  <>
+                    <div
+                      style={{
+                        padding: '8px 10px',
+                        background: 'rgba(56, 189, 248, 0.05)',
+                        border: '1px solid rgba(56, 189, 248, 0.2)',
+                        borderRadius: 8,
+                        marginBottom: 8,
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <span style={{ fontSize: '11px', fontWeight: 600, color: '#38bdf8', display: 'flex', alignItems: 'center', gap: 5 }}>
+                          <ShieldCheck size={13} /> Grok & AI Pre-Flight
+                        </span>
+                        <span style={{ fontSize: '9.5px', padding: '1px 5px', borderRadius: 4, background: 'rgba(52, 211, 153, 0.15)', color: '#34d399', fontWeight: 600 }}>
+                          Clean Meta ✓
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '10.5px', color: 'var(--text-secondary)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span>Codec</span>
+                          <span style={{ color: compressCodec === 'h264' ? '#34d399' : '#f59e0b', fontWeight: 500 }}>
+                            {compressCodec === 'h264' ? 'H.264 (Universal ✓)' : `${compressCodec.toUpperCase()} (Switch to H.264)`}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span>Copyright / Audio</span>
+                          {(activeToolTab === 'cut' ? losslessStripAudio : audioMode === 'strip') ? (
+                            <span style={{ color: '#34d399', fontWeight: 500 }}>Audio Muted (Safe ✓)</span>
+                          ) : (
+                            <span style={{ color: '#f59e0b', display: 'flex', alignItems: 'center', gap: 4 }}>
+                              Audio Active
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (activeToolTab === 'cut') setLosslessStripAudio(true);
+                                  else setAudioMode('strip');
+                                  showToast('Audio muted to avoid copyright filters');
+                                }}
+                                style={{ color: '#38bdf8', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
+                              >
+                                Mute
+                              </button>
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      className={"btn " + (activeToolTab === 'cut' ? 'btn-green' : 'btn-primary')}
+                      style={{ width: '100%', padding: '10px 14px' }}
+                      disabled={isProcessing}
+                      onClick={() => handleRunAction()}
+                    >
+                      {isProcessing ? (
+                        <>
+                          Encoding... {Math.round(progress * 100)}%
+                          {encodingStats.fps > 0 ? (" (" + encodingStats.fps + " fps)") : ''}
+                        </>
+                      ) : activeToolTab === 'cut' ? (
+                        <>
+                          <Scissors size={14} /> {cutMode === 'compress' ? 'Export Compressed Cuts (H.264)' : 'Export Lossless Cut (0.2s)'}
+                        </>
+                      ) : activeToolTab === 'enhance' ? (
+                        <>
+                          <Sparkles size={14} /> AI Cinema Upscale ({upscaleDims.width}×{upscaleDims.height})
+                        </>
+                      ) : (
+                        <>
+                          <Zap size={14} /> Compress Video ({compressRateMode === 'size' ? `${compressTargetMB} MB` : `CQ ${compressCrf}`})
+                        </>
+                      )}
+                    </button>
+                  </>
                 )}
 
                 {isProcessing && (

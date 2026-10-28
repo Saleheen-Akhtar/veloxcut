@@ -87,6 +87,7 @@ export async function webcodecsGpuCompress({
   const videoOptions = {
     width: targetW,
     height: targetH,
+    fit: 'contain',
     codec: targetCodec,
     bitrate: bitrateBps,
     hardwareAcceleration: 'prefer-hardware',

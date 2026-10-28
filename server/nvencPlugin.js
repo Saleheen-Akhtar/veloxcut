@@ -172,9 +172,9 @@ export function nvencAcceleratorPlugin() {
             const baseLabel = originalName.replace(/\.[^/.]+$/, '');
             const startWall = performance.now();
 
-            if (workflowMode === 'lossless') {
-              // NATIVE LOSSLESSCUT STREAM COPY (-c copy)
-              const ext = path.extname(inputPath).slice(1) || 'mp4';
+            if (workflowMode === 'lossless' || workflowMode === 'cut_compress') {
+              const isCompressCut = workflowMode === 'cut_compress';
+              const ext = isCompressCut ? 'mp4' : (path.extname(inputPath).slice(1) || 'mp4');
               const activeSegments = segments.filter((s) => s.end - s.start > 0.05);
               const outputs = [];
 
@@ -191,27 +191,43 @@ export function nvencAcceleratorPlugin() {
                   seg.end.toFixed(3),
                   '-i',
                   inputPath,
-                  '-map',
-                  '0:v:0',
                 ];
-                if (losslessStripAudio) {
-                  args.push('-an');
+
+                if (isCompressCut) {
+                  const targetCodec =
+                    codec === 'hevc'
+                      ? 'hevc_nvenc'
+                      : codec === 'av1'
+                      ? 'libsvtav1'
+                      : 'h264_nvenc';
+
+                  args.push('-c:v', targetCodec, '-pix_fmt', 'yuv420p');
+                  if (targetCodec.includes('nvenc')) {
+                    args.push('-preset', 'p5', '-rc', 'constqp', '-qp', `${Math.max(18, Math.min(32, crf || 24))}`);
+                  } else {
+                    args.push('-preset', '6', '-crf', `${Math.max(18, Math.min(32, crf || 24))}`);
+                  }
+
+                  if (losslessStripAudio) {
+                    args.push('-an');
+                  } else {
+                    args.push('-c:a', 'aac', '-b:a', '128k');
+                  }
                 } else {
-                  args.push('-map', '0:a?');
+                  args.push('-map', '0:v:0');
+                  if (losslessStripAudio) {
+                    args.push('-an');
+                  } else {
+                    args.push('-map', '0:a?');
+                  }
+                  args.push('-c', 'copy', '-avoid_negative_ts', 'make_zero');
                 }
-                args.push(
-                  '-c',
-                  'copy',
-                  '-avoid_negative_ts',
-                  'make_zero',
-                  '-movflags',
-                  '+faststart',
-                  outPath
-                );
+
+                args.push('-map_metadata', '-1', '-movflags', '+faststart', outPath);
 
                 sendEvent({
                   type: 'log',
-                  message: `Native Lossless Cut #${i + 1}: ffmpeg ${args.join(' ')}`,
+                  message: `${isCompressCut ? 'Compressed' : 'Lossless'} Cut #${i + 1}: ffmpeg ${args.join(' ')}`,
                 });
 
                 await runFfmpegWithProgress({
@@ -235,7 +251,7 @@ export function nvencAcceleratorPlugin() {
                   duration: segDur,
                   fileId: outId,
                   size: stat.size,
-                  filename: `${baseLabel}_cut_${i + 1}.${ext}`,
+                  filename: `${baseLabel}_cut_${i + 1}${isCompressCut ? `_${codec || 'h264'}` : ''}.${ext}`,
                   localPath: outPath,
                 });
               }
@@ -292,7 +308,9 @@ export function nvencAcceleratorPlugin() {
                 primary,
                 segments: outputs,
                 elapsedSec,
-                engineUsed: 'Native FFmpeg Stream Copy (-c copy)',
+                engineUsed: isCompressCut
+                  ? `NVIDIA NVENC Hardware Compress (${codec.toUpperCase()})`
+                  : 'Native FFmpeg Stream Copy (-c copy)',
               });
               res.end();
               return;
@@ -326,29 +344,30 @@ export function nvencAcceleratorPlugin() {
             const isCinemaEnhance = isUpscaleWorkflow || enhanceMode === 'cinema';
 
             if (isCinemaEnhance) {
-              // 1. Adaptive Temporal Deblocking: cleans compression macroblocks across time without melting facial textures
-              vf.push('atadenoise=0a=0.04:0b=0.06:1a=0.04:1b=0.06');
-
-              // 2. High-precision Sinc Lanczos-4 scaling with accurate rounding
+              // 1. High-precision Sinc Lanczos-4 scaling with accurate subpixel rounding
               if (width && height) {
                 vf.push(`scale=${width}:${height}:flags=lanczos+accurate_rnd`);
               }
 
-              // 3. AMD FidelityFX CAS (Contrast-Adaptive Sharpening): sharpens contours without white halos
-              const cleanCas = Math.max(0, Math.min(1, Number(casStrength) || 0.65));
+              // 2. AMD FidelityFX CAS (Contrast-Adaptive Sharpening): sharpens contours without halos
+              const cleanCas = Math.max(0.2, Math.min(1.0, Number(casStrength) || 0.65));
               vf.push(`cas=strength=${cleanCas.toFixed(2)}`);
 
-              // 4. Subtle micro-contrast sharpening
-              vf.push('unsharp=3:3:0.35:3:3:0.15');
+              // 3. Multi-frequency luma unsharp mask: makes fine edges, text, and hair pop crisply
+              const lumaSharpen = (0.9 + cleanCas * 0.9).toFixed(2);
+              vf.push(`unsharp=5:5:${lumaSharpen}:5:5:0.0`);
+
+              // 4. Contrast & dynamic range restoration: removes washed-out 480p haze
+              vf.push('eq=contrast=1.06:saturation=1.04');
 
               // 5. Anti-Plastic Organic Micro-Grain Synthesis
               // Injects microscopic optical sensor grain to eliminate the waxy/plastic look
               if (antiPlasticGrain) {
-                vf.push('noise=alls=2:allf=t+u');
+                vf.push('noise=alls=1.5:allf=t+u');
               }
             } else {
               if (width && height) {
-                vf.push(`scale=${width}:${height}:flags=lanczos`);
+                vf.push(`scale=${width}:${height}:flags=lanczos+accurate_rnd`);
               }
             }
 
@@ -434,7 +453,7 @@ export function nvencAcceleratorPlugin() {
               args.push('-c:a', 'aac', '-b:a', `${audioBitrateKbps}k`);
             }
 
-            args.push('-movflags', '+faststart', outPath);
+            args.push('-map_metadata', '-1', '-movflags', '+faststart', outPath);
 
             sendEvent({
               type: 'log',

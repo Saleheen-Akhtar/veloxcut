@@ -43,7 +43,7 @@ import {
 import { probeGpuEncoders } from './engines/gpuProbe';
 import { losslessSplitOrTrim, wasmCompressVideo } from './engines/ffmpegEngine';
 import { createZipBlob } from './utils/zip';
-import { webcodecsGpuCompress } from './engines/webcodecsEngine';
+import { webcodecsGpuCompress, webcodecsCutCompress } from './engines/webcodecsEngine';
 import { checkNativeNvencStatus, runNativeNvencJob } from './engines/nativeNvencEngine';
 import { generateDemoVideoFile } from './utils/demoVideoGenerator';
 import VeloxLandingShowcase from './components/VeloxLandingShowcase';
@@ -146,8 +146,13 @@ export default function App() {
   const [losslessStripAudio, setLosslessStripAudio] = useState(false);
   const [isZipping, setIsZipping] = useState(false);
 
-  // 2. Hardware Engine
-  const [engineType, setEngineType] = useState('nvenc'); // 'nvenc' | 'webcodecs' | 'wasm'
+  // 2. Hardware Engine (Defaults to browser WebCodecs GPU immediately)
+  const [engineType, setEngineType] = useState(() => {
+    if (typeof window !== 'undefined' && 'VideoEncoder' in window) {
+      return 'webcodecs';
+    }
+    return 'wasm';
+  });
 
   // 3. Video Compressor Suite (Dedicated State - Defaults to Original resolution, CQ 24)
   const [compressResolution, setCompressResolution] = useState('original'); // 'original' | '1080' | '720' | '480'
@@ -364,7 +369,7 @@ export default function App() {
   const activeOutputBytes =
     outputResult?.primary?.size ??
     (activeToolTab === 'cut'
-      ? estimatedCutBytes
+      ? (cutMode === 'compress' ? estimatedCompressBytes : estimatedCutBytes)
       : estimatedCompressBytes);
 
   const savingsPct = useMemo(() => {
@@ -708,7 +713,24 @@ export default function App() {
             },
           });
           setOutputResult(res);
+        } else if (isCutCompress && (engineType === 'webcodecs' || (typeof window !== 'undefined' && 'VideoEncoder' in window))) {
+          // Hardware-accelerated client-side cut compression via WebCodecs GPU (fast & compact)
+          showToast(`Compressing ${segments.length} scene(s) via WebCodecs GPU...`);
+          const res = await webcodecsCutCompress({
+            file: videoFile,
+            segments,
+            stripAudio: losslessStripAudio,
+            codec: compressCodec,
+            crf: compressCrf,
+            targetVideoKbps: compressRateMode === 'size' ? compressBitratePlan.videoKbps : undefined,
+            onProgress: ({ progress: p, fps, speed }) => {
+              setProgress(p);
+              setEncodingStats((prev) => ({ ...prev, fps: fps || 0, speed: speed || '' }));
+            },
+          });
+          setOutputResult(res);
         } else {
+          // Instant lossless stream-copy (-c copy, 0.2s)
           const res = await losslessSplitOrTrim({
             file: videoFile,
             segments,
@@ -746,7 +768,7 @@ export default function App() {
         });
         setOutputResult(res);
         setPreviewMode('split-wipe');
-      } else if (engineType === 'webcodecs') {
+      } else if (engineType === 'webcodecs' || (typeof window !== 'undefined' && 'VideoEncoder' in window)) {
         const res = await webcodecsGpuCompress({
           file: videoFile,
           startTime: start,
@@ -905,7 +927,7 @@ export default function App() {
 
           <div className="status-badge" title="Hardware Acceleration Ready">
             <span className="status-dot" />
-            <span>{nvencAvailable ? 'NVIDIA NVENC' : 'WebCodecs GPU'}</span>
+            <span>{nvencAvailable ? 'NVIDIA NVENC' : engineType === 'webcodecs' ? 'WebCodecs GPU' : 'FFmpeg WASM'}</span>
           </div>
 
           <button
@@ -1772,11 +1794,13 @@ export default function App() {
                     <div className="size-row">
                       <span style={{ color: 'var(--text-secondary)' }}>Estimated Size</span>
                       <span className="size-val" style={{ color: '#34d399' }}>
-                        {formatBytes(estimatedCutBytes)}
+                        {formatBytes(cutMode === 'compress' ? estimatedCompressBytes : estimatedCutBytes)}
                       </span>
                     </div>
                     <div style={{ fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                      Instant stream copy (-c copy). No transcoding or quality loss.
+                      {cutMode === 'compress'
+                        ? 'Hardware GPU H.264 compression with calibrated web bitrates.'
+                        : 'Instant stream copy (-c copy). No transcoding or quality loss.'}
                     </div>
                   </div>
                 </>

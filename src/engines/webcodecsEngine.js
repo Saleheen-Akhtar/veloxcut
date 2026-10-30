@@ -91,6 +91,7 @@ export async function webcodecsGpuCompress({
     codec: targetCodec,
     bitrate: bitrateBps,
     hardwareAcceleration: 'prefer-hardware',
+    latencyMode: 'quality',
     forceTranscode: true,
   };
   if (numericFps) {
@@ -105,16 +106,19 @@ export async function webcodecsGpuCompress({
       : {
           codec: 'aac',
           bitrate: (Number(audioBitrateKbps) || 128) * 1000,
-          forceTranscode: true,
         };
+
+  const isTrimming = startTime > 0.05 || (endTime && Math.abs(endTime - clipDuration) > 0.1);
 
   const conversion = await Conversion.init({
     input,
     output,
-    trim: {
-      start: Math.max(0, startTime),
-      end: endTime,
-    },
+    trim: isTrimming
+      ? {
+          start: Math.max(0, startTime),
+          end: endTime,
+        }
+      : undefined,
     video: videoOptions,
     audio: audioOptions,
     showWarnings: false,
@@ -155,6 +159,79 @@ export async function webcodecsGpuCompress({
     },
     segments: [],
     elapsedSec,
-    engineUsed: `Mediabunny WebCodecs (${codec.toUpperCase()} Direct Demux)`,
+    engineUsed: `WebCodecs GPU (${codec.toUpperCase()})`,
+  };
+}
+
+/**
+ * Fast hardware-accelerated Cut & Compression for multiple segments via WebCodecs.
+ * Executes in seconds rather than minutes by utilizing direct GPU silicon.
+ */
+export async function webcodecsCutCompress({
+  file,
+  segments = [],
+  stripAudio = false,
+  codec = 'h264',
+  crf = 24,
+  targetVideoKbps,
+  onProgress,
+  onLog,
+}) {
+  const startWall = performance.now();
+  const activeSegments = segments.filter((s) => s.end - s.start > 0.05);
+  const segmentOutputs = [];
+  const baseName = file.name.replace(/\.[^/.]+$/, '');
+
+  for (let i = 0; i < activeSegments.length; i++) {
+    const seg = activeSegments[i];
+    if (onLog) {
+      onLog(`WebCodecs GPU Encoding Scene ${i + 1}/${activeSegments.length} [${seg.start.toFixed(1)}s -> ${seg.end.toFixed(1)}s]...`);
+    }
+
+    const segResult = await webcodecsGpuCompress({
+      file,
+      startTime: seg.start,
+      endTime: seg.end,
+      codec,
+      rateControlMode: targetVideoKbps ? 'size' : 'crf',
+      crf,
+      targetVideoKbps,
+      audioMode: stripAudio ? 'strip' : 'copy',
+      onProgress: ({ progress, fps, speed }) => {
+        if (onProgress) {
+          onProgress({
+            progress: (i + (progress || 0)) / activeSegments.length,
+            fps,
+            speed,
+          });
+        }
+      },
+      onLog,
+    });
+
+    const segFilename = `${baseName}_cut_${i + 1}_${codec}.mp4`;
+    segmentOutputs.push({
+      index: i + 1,
+      label: seg.label || `Segment ${i + 1}`,
+      start: seg.start,
+      end: seg.end,
+      duration: seg.end - seg.start,
+      blob: segResult.primary.blob,
+      url: segResult.primary.url,
+      size: segResult.primary.size,
+      filename: segFilename,
+    });
+
+    if (onProgress) {
+      onProgress({ progress: (i + 1) / activeSegments.length });
+    }
+  }
+
+  const elapsedSec = (performance.now() - startWall) / 1000;
+  return {
+    primary: segmentOutputs[0],
+    segments: segmentOutputs,
+    elapsedSec,
+    engineUsed: `WebCodecs GPU Hardware Accelerated (${codec.toUpperCase()})`,
   };
 }

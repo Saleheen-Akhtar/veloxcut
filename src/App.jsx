@@ -41,7 +41,8 @@ import {
   estimateCrfFileSize,
 } from './utils/format';
 import { probeGpuEncoders } from './engines/gpuProbe';
-import { losslessSplitOrTrim, wasmCompressVideo, wasmUpscaleVideo } from './engines/ffmpegEngine';
+import { losslessSplitOrTrim, wasmCompressVideo } from './engines/ffmpegEngine';
+import { createZipBlob } from './utils/zip';
 import { webcodecsGpuCompress } from './engines/webcodecsEngine';
 import { checkNativeNvencStatus, runNativeNvencJob } from './engines/nativeNvencEngine';
 import { generateDemoVideoFile } from './utils/demoVideoGenerator';
@@ -137,24 +138,18 @@ export default function App() {
   });
 
   // Feature Navigation & Workflow
-  const [activeToolTab, setActiveToolTab] = useState('enhance'); // 'enhance' | 'compress' | 'cut' | 'audio' | 'media'
+  const [activeToolTab, setActiveToolTab] = useState('compress'); // 'compress' | 'cut' | 'audio' | 'media'
   const [showExportMenu, setShowExportMenu] = useState(false);
 
   // 1. Lossless Cut Suite (Dedicated State)
   const [mergeSegments, setMergeSegments] = useState(false);
   const [losslessStripAudio, setLosslessStripAudio] = useState(false);
+  const [isZipping, setIsZipping] = useState(false);
 
   // 2. Hardware Engine
   const [engineType, setEngineType] = useState('nvenc'); // 'nvenc' | 'webcodecs' | 'wasm'
 
-  // 3. AI Cinema Upscaler Suite (Dedicated State - Defaults to 4K UHD 2160p)
-  const [upscaleTargetRes, setUpscaleTargetRes] = useState('2160'); // '2160' | '1440' | '1080'
-  const [upscaleMode, setUpscaleMode] = useState('cinema'); // 'cinema' | 'standard'
-  const [upscaleAntiPlastic, setUpscaleAntiPlastic] = useState(true);
-  const [upscaleCasStrength, setUpscaleCasStrength] = useState(0.65);
-  const [upscaleFps, setUpscaleFps] = useState('original'); // 'original' | '60' | '30' | '24'
-
-  // 4. Video Compressor Suite (Dedicated State - Defaults to Original resolution, CQ 20)
+  // 3. Video Compressor Suite (Dedicated State - Defaults to Original resolution, CQ 24)
   const [compressResolution, setCompressResolution] = useState('original'); // 'original' | '1080' | '720' | '480'
   const [compressFps, setCompressFps] = useState('original'); // 'original' | '60' | '30' | '24'
   const [compressRateMode, setCompressRateMode] = useState('crf'); // 'crf' | 'size'
@@ -240,18 +235,7 @@ export default function App() {
     return bars;
   }, []);
 
-  // 1. AI Cinema Upscaler Dimensions & Scaling Factor
-  const upscaleDims = useMemo(
-    () => calculateTargetDimensions(meta.width, meta.height, upscaleTargetRes),
-    [meta.width, meta.height, upscaleTargetRes]
-  );
-
-  const upscaleMultiplier = useMemo(() => {
-    if (!meta.height || !upscaleDims.height) return '1.0';
-    return (upscaleDims.height / meta.height).toFixed(1);
-  }, [meta.height, upscaleDims.height]);
-
-  // 2. Video Compressor Dimensions
+  // Video Compressor Dimensions
   const compressDims = useMemo(
     () => calculateTargetDimensions(meta.width, meta.height, compressResolution),
     [meta.width, meta.height, compressResolution]
@@ -269,7 +253,7 @@ export default function App() {
     [compressTargetMB, selectedDuration, audioMode, audioBitrateKbps]
   );
 
-  // Quick Preset Helper for Compressor Suite (strictly isolated from upscaler)
+  // Quick Preset Helper for Compressor Suite
   const activeQuickPreset = useMemo(() => {
     if (
       compressRateMode === 'crf' &&
@@ -335,13 +319,6 @@ export default function App() {
     }
   };
 
-  // Estimated Output Size for AI Cinema Upscale (~32 Mbps for 4K, ~18 Mbps for 2K, ~10 Mbps for 1080p)
-  const estimatedUpscaleBytes = useMemo(() => {
-    if (!selectedDuration) return 0;
-    const mbps = upscaleTargetRes === '2160' ? 32 : upscaleTargetRes === '1440' ? 18 : 10;
-    return Math.round(((mbps * 1_000_000) / 8) * selectedDuration);
-  }, [selectedDuration, upscaleTargetRes]);
-
   // Estimated Output Size for Lossless Cut
   const estimatedCutBytes = useMemo(() => {
     if (!meta.size || !meta.duration) return 0;
@@ -386,9 +363,7 @@ export default function App() {
 
   const activeOutputBytes =
     outputResult?.primary?.size ??
-    (activeToolTab === 'enhance'
-      ? estimatedUpscaleBytes
-      : activeToolTab === 'cut'
+    (activeToolTab === 'cut'
       ? estimatedCutBytes
       : estimatedCompressBytes);
 
@@ -453,7 +428,8 @@ export default function App() {
       setIsPlaying(false);
 
       const origMB = file.size / (1024 * 1024);
-      setCompressTargetMB(Math.max(0.5, Number((origMB * 0.5).toFixed(1))));
+      // Smart compact default target MB (e.g. ~25% of source size, capped sensibly between 5MB and 25MB for web)
+      setCompressTargetMB(Math.min(25, Math.max(5, Number((origMB * 0.25).toFixed(1)))));
 
       const probe = document.createElement('video');
       probe.preload = 'metadata';
@@ -711,9 +687,7 @@ export default function App() {
       const end = activeSegment?.end || meta.duration;
       const effectiveMode =
         targetMode ||
-        (activeToolTab === 'enhance'
-          ? 'upscale'
-          : activeToolTab === 'cut'
+        (activeToolTab === 'cut'
           ? 'lossless'
           : 'compress');
 
@@ -745,56 +719,6 @@ export default function App() {
             onProgress: ({ progress: p }) => setProgress(p),
           });
           setOutputResult(res);
-        }
-      } else if (effectiveMode === 'upscale' || effectiveMode === 'enhance') {
-        // AI Cinema Super-Resolution Mastering: Strictly Uncompressed Mastering Quality (-cq 14, -maxrate 80M)
-        if (nvencAvailable) {
-          const res = await runNativeNvencJob({
-            file: videoFile,
-            workflowMode: 'upscale',
-            startTime: start,
-            endTime: end,
-            width: upscaleDims.width,
-            height: upscaleDims.height,
-            fps: upscaleFps,
-            codec: 'hevc',
-            rateControlMode: 'crf',
-            crf: 14,
-            audioMode: 'copy',
-            audioBitrateKbps: 320,
-            psychoVisualHq: true,
-            enhanceMode: upscaleMode,
-            antiPlasticGrain: upscaleAntiPlastic,
-            casStrength: upscaleCasStrength,
-            onProgress: ({ progress: p, fps, speed }) => {
-              setProgress(p);
-              setEncodingStats((prev) => ({ ...prev, fps: fps || prev.fps, speed: speed || prev.speed }));
-            },
-          });
-          setOutputResult(res);
-          setPreviewMode('split-wipe');
-        } else {
-          // In-Browser Client-Side Super-Resolution Engine (Runs on ANY live deployed web host)
-          showToast(`Enhancing video in-browser to ${upscaleDims.width}×${upscaleDims.height}...`);
-          const res = await wasmUpscaleVideo({
-            file: videoFile,
-            startTime: start,
-            endTime: end,
-            width: upscaleDims.width,
-            height: upscaleDims.height,
-            fps: upscaleFps,
-            casStrength: upscaleCasStrength,
-            antiPlasticGrain: upscaleAntiPlastic,
-            onProgress: ({ progress: p }) => {
-              setProgress(p);
-              setEncodingStats((prev) => ({ ...prev, speed: 'In-Browser DSP' }));
-            },
-            onLog: (msg) => {
-              console.log('[In-Browser Super-Resolution]', msg);
-            },
-          });
-          setOutputResult(res);
-          setPreviewMode('split-wipe');
         }
       } else if (engineType === 'nvenc' && nvencAvailable) {
         const res = await runNativeNvencJob({
@@ -863,9 +787,7 @@ export default function App() {
       }
       setProgress(1);
       showToast(
-        effectiveMode === 'upscale' || effectiveMode === 'enhance'
-          ? `AI Cinema ${upscaleDims.width}×${upscaleDims.height} complete!`
-          : effectiveMode === 'lossless'
+        effectiveMode === 'lossless'
           ? 'Instant Lossless Cut complete!'
           : 'Video compression complete!'
       );
@@ -885,6 +807,30 @@ export default function App() {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+  };
+
+  const handleDownloadAllZip = async (items) => {
+    if (!items || !items.length) return;
+    try {
+      setIsZipping(true);
+      showToast(`Packaging ${items.length} clips into ZIP...`);
+      const zipBlob = await createZipBlob(items);
+      const zipUrl = URL.createObjectURL(zipBlob);
+      const a = document.createElement('a');
+      a.href = zipUrl;
+      const baseName = (meta.name || 'veloxcut').replace(/\.[^/.]+$/, '');
+      a.download = `${baseName}_cut_clips.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(zipUrl), 30000);
+      showToast(`ZIP ready! Saved all ${items.length} clips.`);
+    } catch (err) {
+      console.error('ZIP creation failed, falling back to sequential download:', err);
+      triggerDownloadAll(items);
+    } finally {
+      setIsZipping(false);
+    }
   };
 
   const triggerDownloadAll = (items) => {
@@ -924,7 +870,6 @@ export default function App() {
           <div className="topbar-tool-indicator">
             <span>Suite:</span>
             <span className="active-tab">
-              {activeToolTab === 'enhance' && <><Sparkles size={12} /> AI Cinema Enhancer</>}
               {activeToolTab === 'compress' && <><Zap size={12} /> Compression</>}
               {activeToolTab === 'cut' && <><Scissors size={12} /> Cut &amp; Clips</>}
               {activeToolTab === 'audio' && <><Volume2 size={12} /> Audio</>}
@@ -1007,12 +952,10 @@ export default function App() {
                 ) : (
                   <>
                     <Download size={13} />
-                    {activeToolTab === 'enhance' ? (
-                      <>AI Cinema Upscale ({upscaleDims.width}×{upscaleDims.height})</>
-                    ) : activeToolTab === 'cut' ? (
+                    {activeToolTab === 'cut' ? (
                       <>Export Lossless Cut</>
                     ) : (
-                      <>Export Video</>
+                      <>Export Compressed Video</>
                     )}
                   </>
                 )}
@@ -1040,18 +983,6 @@ export default function App() {
                     <div>
                       <span className="export-dropdown-item-title">Instant Lossless Cut</span>
                       <span className="export-dropdown-item-desc">Stream-copy in 0.2s with 0% quality loss</span>
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    className="export-dropdown-item"
-                    onClick={() => handleRunAction('upscale')}
-                  >
-                    <Sparkles size={15} style={{ color: '#38bdf8', marginTop: 2, flexShrink: 0 }} />
-                    <div>
-                      <span className="export-dropdown-item-title">AI Cinema 4K Super-Res</span>
-                      <span className="export-dropdown-item-desc">RTX 4050 NVENC p7 with Anti-Plastic Grain &amp; CAS</span>
                     </div>
                   </button>
 
@@ -1086,15 +1017,6 @@ export default function App() {
       <div className="nle-workspace-body">
         {/* Left Activity Rail (CapCut / Premiere Pro style) */}
         <nav className="nle-left-rail" aria-label="Editor Tools">
-          <button
-            type="button"
-            className={`rail-btn ${activeToolTab === 'enhance' ? 'active' : ''}`}
-            onClick={() => { setActiveToolTab('enhance'); setIsInspectorOpen(true); }}
-            title="AI Cinema Enhancer"
-          >
-            <Sparkles size={17} />
-            <span>Enhance</span>
-          </button>
 
           <button
             type="button"
@@ -1380,7 +1302,6 @@ export default function App() {
           <aside className="nle-inspector-panel">
             <div className="inspector-header">
               <span className="inspector-title">
-                {activeToolTab === 'enhance' && 'AI Cinema Enhancer'}
                 {activeToolTab === 'compress' && 'Compression Suite'}
                 {activeToolTab === 'cut' && 'Cut & Segments'}
                 {activeToolTab === 'audio' && 'Audio Track'}
@@ -1398,13 +1319,6 @@ export default function App() {
 
             {/* Inspector Tab Strip */}
             <div className="inspector-tab-strip">
-              <button
-                type="button"
-                className={`insp-tab-btn ${activeToolTab === 'enhance' ? 'active blue' : ''}`}
-                onClick={() => setActiveToolTab('enhance')}
-              >
-                <Sparkles size={11} /> Enhance
-              </button>
               <button
                 type="button"
                 className={`insp-tab-btn ${activeToolTab === 'compress' ? 'active blue' : ''}`}
@@ -1435,142 +1349,7 @@ export default function App() {
               </button>
             </div>
 
-                        <div className="inspector-scroll-body">
-              {/* TAB 1: AI CINEMA ENHANCER */}
-              {activeToolTab === 'enhance' && (
-                <>
-                  <div className="cinema-enhancement-card">
-                    <div className="inspector-group-title">
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#38bdf8' }}>
-                        <Sparkles size={13} />
-                        AI Super-Resolution
-                      </span>
-                      <span className="enhancer-badge">
-                        {upscaleMultiplier}× Super-Res
-                      </span>
-                    </div>
-
-                    <div style={{ marginTop: 8 }}>
-                      <label style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
-                        Target Cinema Resolution
-                      </label>
-                      <select
-                        className="select-control"
-                        value={upscaleTargetRes}
-                        onChange={(e) => setUpscaleTargetRes(e.target.value)}
-                      >
-                        <option value="2160">AI Cinema 4K UHD (3840×2160) — Recommended</option>
-                        <option value="1440">Enhanced 2K QHD (2560×1440)</option>
-                        <option value="1080">Enhanced 1080p FHD (1920×1080)</option>
-                      </select>
-                    </div>
-
-                    <div style={{ marginTop: 10 }}>
-                      <label style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
-                        Framerate
-                      </label>
-                      <select
-                        className="select-control"
-                        value={upscaleFps}
-                        onChange={(e) => setUpscaleFps(e.target.value)}
-                      >
-                        <option value="original">Original FPS ({meta.fps || 30} fps)</option>
-                        <option value="60">Smooth 60 FPS</option>
-                        <option value="30">Cinema 30 FPS</option>
-                        <option value="24">Cinematic 24 FPS</option>
-                      </select>
-                    </div>
-
-                    <div style={{ marginTop: 10 }}>
-                      <div className="segmented-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
-                        <button
-                          type="button"
-                          className={"seg-btn " + (upscaleMode === 'cinema' ? 'active-blue' : '')}
-                          onClick={() => setUpscaleMode('cinema')}
-                        >
-                          Cinema Anti-Plastic
-                        </button>
-                        <button
-                          type="button"
-                          className={"seg-btn " + (upscaleMode === 'standard' ? 'active-blue' : '')}
-                          onClick={() => setUpscaleMode('standard')}
-                        >
-                          Standard Lanczos
-                        </button>
-                      </div>
-                    </div>
-
-                    {upscaleMode === 'cinema' && (
-                      <div className="enhancer-subpanel" style={{ marginTop: 10 }}>
-                        <label className="enhancer-toggle-row">
-                          <div className="enhancer-label-text">
-                            <strong>Organic Texture Guard</strong>
-                            <span>Injects temporal sensor grain to stop plastic wax look</span>
-                          </div>
-                          <input
-                            type="checkbox"
-                            checked={upscaleAntiPlastic}
-                            onChange={(e) => setUpscaleAntiPlastic(e.target.checked)}
-                          />
-                        </label>
-
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-secondary)' }}>
-                            <span>Contrast-Adaptive Sharpen (CAS)</span>
-                            <span style={{ fontFamily: 'var(--font-mono)', color: '#38bdf8' }}>
-                              {Math.round(upscaleCasStrength * 100)}%
-                            </span>
-                          </div>
-                          <input
-                            type="range"
-                            min="0"
-                            max="1"
-                            step="0.05"
-                            className="slider-control"
-                            value={upscaleCasStrength}
-                            onChange={(e) => setUpscaleCasStrength(Number(e.target.value))}
-                          />
-                        </div>
-
-                        <div className="enhancer-pipeline-info">
-                          Temporal Deblock • AMD CAS • Sinc Lanczos-4 • NVENC p7 (Mastering Bitrate)
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="size-preview-card">
-                    <div className="size-row">
-                      <span style={{ color: 'var(--text-secondary)' }}>Hardware Engine</span>
-                      <span className="size-val" style={{ color: '#38bdf8' }}>
-                        {nvencAvailable ? 'NVIDIA NVENC (Mastering Quality)' : 'WebCodecs GPU'}
-                      </span>
-                    </div>
-                    <div className="size-row">
-                      <span style={{ color: 'var(--text-secondary)' }}>Source Resolution</span>
-                      <span className="size-val">{meta.width}×{meta.height}</span>
-                    </div>
-                    <div className="size-row">
-                      <span style={{ color: 'var(--text-secondary)' }}>Target Upscale Canvas</span>
-                      <span className="size-val" style={{ color: '#38bdf8', fontWeight: 600 }}>
-                        {upscaleDims.width}×{upscaleDims.height} ({upscaleMultiplier}×)
-                      </span>
-                    </div>
-                    <div className="size-row">
-                      <span style={{ color: 'var(--text-secondary)' }}>Bitrate / Compression</span>
-                      <span className="size-val" style={{ color: '#34d399' }}>
-                        Mastering CQ 14 (No Compression)
-                      </span>
-                    </div>
-                    <div className="size-row">
-                      <span style={{ color: 'var(--text-secondary)' }}>Estimated Size</span>
-                      <span className="size-val" style={{ color: '#38bdf8' }}>
-                        ~{formatBytes(estimatedUpscaleBytes)}
-                      </span>
-                    </div>
-                  </div>
-                </>
-              )}
+            <div className="inspector-scroll-body">
 
               {/* TAB 2: COMPRESSION & PRESETS */}
               {activeToolTab === 'compress' && (
@@ -1805,7 +1584,7 @@ export default function App() {
                     >
                       <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <Cpu size={13} style={{ color: '#3b82f6' }} />
-                        Pro Quality Enhancements
+                        Advanced Encoder Tuning
                       </span>
                       <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
                         {compressPsychoVisual ? '2-Pass AQ Active' : 'Standard'} {showProSettings ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
@@ -2156,24 +1935,32 @@ export default function App() {
                         <CheckCircle2 size={15} /> Ready in {outputResult.elapsedSec.toFixed(1)}s
                       </span>
                       <span className="savings-tag">
-                        {outputResult.primary.label?.includes('AI Cinema') ? (
-                          '4K Master'
-                        ) : (
-                          `Saved ${savingsPct}%`
-                        )}
+                        Saved {savingsPct}%
                       </span>
                     </div>
                     {outputResult.segments && outputResult.segments.length > 1 ? (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
                         {!mergeSegments ? (
-                          <button
-                            type="button"
-                            className="btn btn-green"
-                            style={{ width: '100%', padding: '10px 14px' }}
-                            onClick={() => triggerDownloadAll(outputResult.segments)}
-                          >
-                            <Download size={14} /> Download All {outputResult.segments.length} Clips (Batch)
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              className="btn btn-green"
+                              style={{ width: '100%', padding: '10px 14px', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                              onClick={() => handleDownloadAllZip(outputResult.segments)}
+                              disabled={isZipping}
+                            >
+                              <Download size={14} /> {isZipping ? 'Packaging ZIP Archive...' : `Download All ${outputResult.segments.length} Clips (.ZIP)`}
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-sm"
+                              style={{ width: '100%', fontSize: '11px', color: 'var(--text-muted)' }}
+                              onClick={() => triggerDownloadAll(outputResult.segments)}
+                              title="Download clips one by one into downloads folder"
+                            >
+                              <Download size={11} /> Save {outputResult.segments.length} Files Individually
+                            </button>
+                          </>
                         ) : (
                           <>
                             <button
@@ -2188,14 +1975,15 @@ export default function App() {
                               type="button"
                               className="btn btn-ghost btn-sm"
                               style={{ width: '100%', fontSize: '11.5px' }}
-                              onClick={() => triggerDownloadAll(outputResult.segments)}
+                              onClick={() => handleDownloadAllZip(outputResult.segments)}
+                              disabled={isZipping}
                             >
-                              <Download size={12} /> Download All {outputResult.segments.length} Separate Clips
+                              <Download size={12} /> {isZipping ? 'Packaging ZIP...' : `Download ${outputResult.segments.length} Separate Clips (.ZIP)`}
                             </button>
                           </>
                         )}
 
-                        <div style={{ maxHeight: '160px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 5, marginTop: 2 }}>
+                        <div style={{ maxHeight: '170px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 5, marginTop: 2 }}>
                           {outputResult.segments.map((seg, idx) => (
                             <div
                               key={idx}
@@ -2221,7 +2009,7 @@ export default function App() {
                                 className="btn btn-sm btn-ghost"
                                 style={{ padding: '3px 8px', height: 'auto', fontSize: '11px', display: 'flex', alignItems: 'center', gap: 4 }}
                                 onClick={() => triggerDownload(seg)}
-                                title="Download this clip"
+                                title={`Download ${seg.filename || `Clip ${idx + 1}`}`}
                               >
                                 <Download size={11} /> Save
                               </button>
@@ -2314,10 +2102,6 @@ export default function App() {
                       ) : activeToolTab === 'cut' ? (
                         <>
                           <Scissors size={14} /> {cutMode === 'compress' ? 'Export Compressed Cuts (H.264)' : 'Export Lossless Cut (0.2s)'}
-                        </>
-                      ) : activeToolTab === 'enhance' ? (
-                        <>
-                          <Sparkles size={14} /> AI Cinema Upscale ({upscaleDims.width}×{upscaleDims.height})
                         </>
                       ) : (
                         <>

@@ -201,11 +201,19 @@ export function nvencAcceleratorPlugin() {
                       ? 'libsvtav1'
                       : 'h264_nvenc';
 
+                  const segTargetKbps = Math.max(250, Math.min(6000, Math.round((1280 * 720 * 30 * 0.026) / 1000)));
                   args.push('-c:v', targetCodec, '-pix_fmt', 'yuv420p');
                   if (targetCodec.includes('nvenc')) {
-                    args.push('-preset', 'p5', '-rc', 'constqp', '-qp', `${Math.max(18, Math.min(32, crf || 24))}`);
+                    args.push(
+                      '-preset', 'p5',
+                      '-rc', 'vbr',
+                      '-cq', `${Math.max(22, Math.min(32, crf || 24))}`,
+                      '-b:v', `${segTargetKbps}k`,
+                      '-maxrate', `${Math.round(segTargetKbps * 1.35)}k`,
+                      '-bufsize', `${Math.round(segTargetKbps * 2.5)}k`
+                    );
                   } else {
-                    args.push('-preset', '6', '-crf', `${Math.max(18, Math.min(32, crf || 24))}`);
+                    args.push('-preset', 'veryfast', '-crf', `${Math.max(22, Math.min(32, crf || 24))}`);
                   }
 
                   if (losslessStripAudio) {
@@ -338,39 +346,11 @@ export function nvencAcceleratorPlugin() {
               inputPath,
             ];
 
-            // Cinema Restoration & Super-Resolution Filter Chain
+            // Scaling & Framerate Filters
             const vf = [];
-            const isUpscaleWorkflow = workflowMode === 'upscale' || workflowMode === 'enhance';
-            const isCinemaEnhance = isUpscaleWorkflow || enhanceMode === 'cinema';
-
-            if (isCinemaEnhance) {
-              // 1. High-precision Sinc Lanczos-4 scaling with accurate subpixel rounding
-              if (width && height) {
-                vf.push(`scale=${width}:${height}:flags=lanczos+accurate_rnd`);
-              }
-
-              // 2. AMD FidelityFX CAS (Contrast-Adaptive Sharpening): sharpens contours without halos
-              const cleanCas = Math.max(0.2, Math.min(1.0, Number(casStrength) || 0.65));
-              vf.push(`cas=strength=${cleanCas.toFixed(2)}`);
-
-              // 3. Multi-frequency luma unsharp mask: makes fine edges, text, and hair pop crisply
-              const lumaSharpen = (0.9 + cleanCas * 0.9).toFixed(2);
-              vf.push(`unsharp=5:5:${lumaSharpen}:5:5:0.0`);
-
-              // 4. Contrast & dynamic range restoration: removes washed-out 480p haze
-              vf.push('eq=contrast=1.06:saturation=1.04');
-
-              // 5. Anti-Plastic Organic Micro-Grain Synthesis
-              // Injects microscopic optical sensor grain to eliminate the waxy/plastic look
-              if (antiPlasticGrain) {
-                vf.push('noise=alls=1.5:allf=t+u');
-              }
-            } else {
-              if (width && height) {
-                vf.push(`scale=${width}:${height}:flags=lanczos+accurate_rnd`);
-              }
+            if (width && height) {
+              vf.push(`scale=${width}:${height}:flags=fast_bilinear`);
             }
-
             if (fps && fps !== 'original') {
               vf.push(`fps=${fps}`);
             }
@@ -379,8 +359,8 @@ export function nvencAcceleratorPlugin() {
             }
 
             if (!isAv1) {
-              // NVIDIA NVENC Hardware Encoder with Psycho-Visual Quality Tuning
-              const nvencPreset = isCinemaEnhance ? 'p7' : psychoVisualHq ? 'p6' : 'p3';
+              // NVIDIA NVENC Hardware Encoder with Balanced Fast Preset
+              const nvencPreset = psychoVisualHq ? 'p5' : 'p3';
               args.push(
                 '-c:v',
                 encoderName,
@@ -388,24 +368,20 @@ export function nvencAcceleratorPlugin() {
                 nvencPreset,
                 '-tune',
                 'hq',
-                '-multipass',
-                'fullres',
                 '-pix_fmt',
                 'yuv420p'
               );
 
-              if (psychoVisualHq || isCinemaEnhance) {
+              if (psychoVisualHq) {
                 args.push(
                   '-spatial-aq',
                   '1',
                   '-aq-strength',
-                  isCinemaEnhance ? '10' : '8',
+                  '8',
                   '-temporal-aq',
                   '1',
                   '-rc-lookahead',
-                  isCinemaEnhance ? '32' : '24',
-                  '-b_ref_mode',
-                  'middle'
+                  '20'
                 );
               }
 
@@ -413,11 +389,8 @@ export function nvencAcceleratorPlugin() {
                 args.push('-tag:v', 'hvc1');
               }
 
-              if (isUpscaleWorkflow) {
-                // MASTERING SUPER-RESOLUTION: UNCONSTRAINED MASTERING BITRATE (NEVER COMPRESS!)
-                args.push('-rc', 'vbr', '-cq', '14', '-b:v', '0', '-maxrate', '80M', '-bufsize', '160M');
-              } else if (rateControlMode === 'size') {
-                const vKbps = Math.max(100, Math.floor(targetVideoKbps));
+              if (rateControlMode === 'size') {
+                const vKbps = Math.max(80, Math.floor(targetVideoKbps));
                 args.push(
                   '-rc',
                   'vbr',
@@ -429,16 +402,28 @@ export function nvencAcceleratorPlugin() {
                   `${Math.floor(vKbps * 2.5)}k`
                 );
               } else {
-                // Constant Perceptual Quality (Visually Lossless CQ)
-                args.push('-rc', 'vbr', '-cq', String(crf), '-b:v', '0');
+                // Calibrated Rate-Controlled VBR for true compact file sizes
+                const pps = (width || 1280) * (height || 720) * (fps === '60' ? 60 : 30);
+                const targetBps = Math.round(pps * 0.026 * Math.pow(2, (24 - crf) / 6));
+                const targetKbps = Math.max(250, Math.min(10000, Math.round(targetBps / 1000)));
+                args.push(
+                  '-rc',
+                  'vbr',
+                  '-cq',
+                  String(crf),
+                  '-b:v',
+                  `${targetKbps}k`,
+                  '-maxrate',
+                  `${Math.round(targetKbps * 1.35)}k`,
+                  '-bufsize',
+                  `${Math.round(targetKbps * 2.5)}k`
+                );
               }
             } else {
               // SVT-AV1 Multi-Core Encoder fallback for AV1
               args.push('-c:v', 'libsvtav1', '-preset', '8', '-pix_fmt', 'yuv420p');
-              if (isUpscaleWorkflow) {
-                args.push('-crf', '14');
-              } else if (rateControlMode === 'size') {
-                const vKbps = Math.max(100, Math.floor(targetVideoKbps));
+              if (rateControlMode === 'size') {
+                const vKbps = Math.max(80, Math.floor(targetVideoKbps));
                 args.push('-rc', '1', '-b:v', `${vKbps}k`);
               } else {
                 args.push('-crf', String(crf));
@@ -457,7 +442,7 @@ export function nvencAcceleratorPlugin() {
 
             sendEvent({
               type: 'log',
-              message: `Launching High-Quality NVENC: ffmpeg ${args.join(' ')}`,
+              message: `Launching NVENC: ffmpeg ${args.join(' ')}`,
             });
 
             await runFfmpegWithProgress({
@@ -480,23 +465,17 @@ export function nvencAcceleratorPlugin() {
             sendEvent({
               type: 'done',
               primary: {
-                label: isUpscaleWorkflow
-                  ? `AI Cinema ${width}×${height} UHD`
-                  : `NVENC HQ (${codec.toUpperCase()})`,
+                label: `Compressed (${codec.toUpperCase()})`,
                 start: startTime,
                 end: endTime,
                 duration: clipDuration,
                 fileId: outId,
                 size: stat.size,
-                filename: isUpscaleWorkflow
-                  ? `${baseLabel}_cinema_${height}p.mp4`
-                  : `${baseLabel}_${codec}_hq.mp4`,
+                filename: `${baseLabel}_${codec}_compressed.mp4`,
               },
               segments: [],
               elapsedSec,
-              engineUsed: isUpscaleWorkflow
-                ? `NVIDIA NVENC AI Cinema Super-Resolution (${encoderName})`
-                : `NVIDIA NVENC Psycho-Visual HQ (${encoderName})`,
+              engineUsed: `NVIDIA NVENC Hardware Compress (${encoderName})`,
             });
             res.end();
           } catch (err) {

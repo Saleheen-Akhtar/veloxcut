@@ -86,45 +86,40 @@ export function calculateTargetBitrates({
 }
 
 /**
- * Estimates output file size in bytes when using CRF / Quality mode
+ * Estimates output file size in bytes when using CRF / Quality mode based on target resolution, framerate, and CRF
  */
 export function estimateCrfFileSize({
-  srcSizeBytes,
   fullDurationSec,
   selectedDurationSec,
-  srcWidth,
-  srcHeight,
   targetWidth,
   targetHeight,
-  srcFps,
   targetFps,
   codec,
   crf,
   audioMode,
   audioBitrateKbps = 128,
 }) {
-  if (!srcSizeBytes || !fullDurationSec) return 0;
+  const dur = selectedDurationSec || fullDurationSec || 0;
+  if (!dur) return 0;
 
-  const durationRatio = Math.min(1, Math.max(0.01, selectedDurationSec / fullDurationSec));
-  const pixelRatio =
-    srcWidth && srcHeight
-      ? (targetWidth * targetHeight) / (srcWidth * srcHeight)
-      : 1;
-  const fpsRatio =
-    targetFps && srcFps && targetFps < srcFps ? Math.pow(targetFps / srcFps, 0.65) : 1;
+  const w = targetWidth || 1920;
+  const h = targetHeight || 1080;
+  const fps = Number(targetFps) && targetFps !== 'original' ? Number(targetFps) : 30;
 
-  // Baseline CRF 23 is ~0.55x of typical unoptimized source at same resolution; each +6 CRF halves bitrate
-  const crfFactor = Math.pow(2, (23 - crf) / 6) * 0.55;
+  // Calibrated bits-per-pixel for true compact compression:
+  // Base at CRF 24: ~0.026 bpp (1080p @ 30fps is ~1.6 Mbps)
+  // Each +6 CRF halves the bitrate
+  const baseBpp = 0.026;
+  const crfFactor = Math.pow(2, (24 - Number(crf || 24)) / 6);
   const codecEfficiency =
-    codec === 'av1' ? 0.62 : codec === 'hevc' ? 0.72 : 1.0;
+    codec === 'av1' ? 0.65 : codec === 'hevc' ? 0.75 : 1.0;
 
-  const baseVideoBytes =
-    srcSizeBytes * durationRatio * pixelRatio * fpsRatio * crfFactor * codecEfficiency;
-
-  const audioBytes =
+  const videoBps = Math.max(100_000, Math.min(25_000_000, w * h * fps * baseBpp * crfFactor * codecEfficiency));
+  const audioBps =
     audioMode === 'strip'
       ? 0
-      : ((audioBitrateKbps * 1000) / 8) * selectedDurationSec;
+      : (Number(audioBitrateKbps) || 128) * 1000;
 
-  return Math.max(32 * 1024, Math.round(baseVideoBytes + audioBytes));
+  const totalBytes = ((videoBps + audioBps) / 8) * dur;
+  return Math.max(32 * 1024, Math.round(totalBytes));
 }

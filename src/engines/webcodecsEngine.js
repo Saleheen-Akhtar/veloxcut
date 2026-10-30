@@ -10,12 +10,12 @@ import {
 
 function crfToHardwareBitrateBps({ width, height, fps, crf, codec }) {
   const pixelsPerSec = width * height * fps;
-  const baseBpp = 0.095;
-  const crfMultiplier = Math.pow(2, (23 - crf) / 6);
-  const codecFactor = codec === 'av1' ? 0.62 : codec === 'hevc' ? 0.72 : 1.0;
+  const baseBpp = 0.026; // High-efficiency web compression (~1.6 Mbps for 1080p@30fps)
+  const crfMultiplier = Math.pow(2, (24 - crf) / 6);
+  const codecFactor = codec === 'av1' ? 0.65 : codec === 'hevc' ? 0.75 : 1.0;
 
   const rawBps = pixelsPerSec * baseBpp * crfMultiplier * codecFactor;
-  return Math.max(120_000, Math.min(80_000_000, Math.round(rawBps)));
+  return Math.max(80_000, Math.min(18_000_000, Math.round(rawBps)));
 }
 
 /**

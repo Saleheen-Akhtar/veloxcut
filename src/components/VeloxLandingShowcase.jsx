@@ -130,23 +130,23 @@ export default function VeloxLandingShowcase({
 
   const accordionItems = [
     {
-      title: 'Neural CAS Sharpening',
-      subtitle: 'Contrast-Adaptive Unsharp Mask',
+      title: 'Lossless Bitstream Splitter',
+      subtitle: 'Instant Keyframe Stream-Copy',
       description:
-        'Eliminates digital softening through high-frequency gradient reconstruction while keeping natural skin tones and grain structure intact.',
-      metric: '4.5x Scale Factor',
+        'Slices and trims multi-gigabyte video clips in under 0.2s without re-encoding, preserving exact bit-for-bit video and audio fidelity.',
+      metric: '0.2s Export Speed',
       gradient: 'radial-gradient(circle at 30% 30%, rgba(56, 189, 248, 0.4), transparent 70%), linear-gradient(135deg, #0369a1 0%, #082f49 50%, #020617 100%)',
     },
     {
       title: 'NVENC Direct Bitstream Pipeline',
       subtitle: 'Zero CPU Bottlenecks',
       description:
-        'Streams multi-gigabyte bitstreams straight to the NVIDIA NVENC silicon for sub-second exports at constant-quality CQ 14 mastering.',
+        'Streams high-bitrate video straight to the NVIDIA NVENC silicon for sub-second exports at calibrated constant-quality CQ compression.',
       metric: '380+ FPS Encoding',
       gradient: 'radial-gradient(circle at 30% 30%, rgba(99, 102, 241, 0.4), transparent 70%), linear-gradient(135deg, #4338ca 0%, #1e1b4b 50%, #020617 100%)',
     },
     {
-      title: 'WebCodecs GPU Stream Copy',
+      title: 'WebCodecs GPU Stream Engine',
       subtitle: 'In-Browser Silicon Acceleration',
       description:
         'Splits, trims, and remuxes MP4 and MKV containers losslessly at memory speed without touching CPU cycles or uncompressing frames.',
@@ -237,7 +237,7 @@ export default function VeloxLandingShowcase({
         <div className="hero-content-boundary">
           <div className="hero-editorial-group">
             <h1 className="hero-h1-editorial">
-              AI Cinema Mastering
+              High-Speed Precision Cutting
               <span
                 className="inline-pill-image"
                 style={{
@@ -246,12 +246,12 @@ export default function VeloxLandingShowcase({
                   boxShadow: '0 0 20px rgba(56, 189, 248, 0.45), inset 0 0 10px rgba(255, 255, 255, 0.35)',
                 }}
               />
-              for High-Bitrate Video
+              for Any Video Format
             </h1>
 
             <p className="hero-subtitle-editorial">
-              Upscale low-resolution source footage into 4K master grade without plastic smoothing,
-              or compress multi-gigabyte footage in milliseconds via direct NVENC silicon.
+              Perform sub-second stream-copy cuts with zero transcoding, or compress heavy footage
+              into ultra-compact H.264 files ready for Grok, Discord, and messaging.
             </p>
 
             <div className="hero-action-row">
@@ -285,10 +285,10 @@ export default function VeloxLandingShowcase({
                   <span />
                 </div>
                 <div className="mockup-title-tab">
-                  veloxcut_master_timeline_4k.nvenc
+                  veloxcut_lossless_timeline.mp4
                 </div>
                 <div className="mockup-engine-indicator">
-                  3840×2160 UHD • 60 FPS
+                  1080p FHD • 60 FPS
                 </div>
               </div>
 
@@ -307,9 +307,9 @@ export default function VeloxLandingShowcase({
                   }}
                 >
                   <div className="mockup-split-overlay">
-                    <div className="mockup-split-label left">Source (480p)</div>
+                    <div className="mockup-split-label left">Original Stream</div>
                     <div className="mockup-split-divider" />
-                    <div className="mockup-split-label right">Neural Master (4K)</div>
+                    <div className="mockup-split-label right">Lossless Cut (0.2s)</div>
                   </div>
 
                   <div className="mockup-center-prompt">
@@ -332,7 +332,7 @@ export default function VeloxLandingShowcase({
                     <div className="clip-handle-start" />
                     <div className="clip-body-preview">
                       <span className="clip-label-text">
-                        Scene 01_Cinema4K_Upscale.mp4
+                        Scene 01_Lossless_Cut.mp4
                       </span>
                     </div>
                     <div className="clip-handle-end" />
@@ -388,20 +388,20 @@ export default function VeloxLandingShowcase({
 
         {/* 4-column, 2-row mathematically interlocking grid (8/8 cells filled) */}
         <div className="bento-grid-container">
-          {/* Card A: AI Cinema Upscaler with interactive wipe (Col span 2, Row span 2 = 4 cells) */}
+          {/* Card A: Lossless Stream Splitter with interactive comparison (Col span 2, Row span 2 = 4 cells) */}
           <div className="bento-cell bento-hero-wipe col-span-2 row-span-2">
             <div className="bento-card-inner">
               <div className="bento-badge-row">
-                <span className="badge-technical">AI Cinema Engine</span>
-                <span className="badge-highlight">4K UHD Master</span>
+                <span className="badge-technical">Lossless Stream-Copy</span>
+                <span className="badge-highlight">0.2s Instant Cut</span>
               </div>
 
               <h3 className="bento-h3-title">
-                Hardware CAS Super-Resolution
+                Zero-Transcode Precision Cutting
               </h3>
               <p className="bento-p-body">
-                Drag the interactive divider below to compare standard bilinear scaling against
-                neural contrast-adaptive sharpening.
+                Split, trim, and export multi-scene video clips in milliseconds without re-encoding a single frame.
+                100% original video &amp; audio fidelity with zero generational loss.
               </p>
 
               <div
@@ -414,10 +414,10 @@ export default function VeloxLandingShowcase({
                   style={{
                     background:
                       'radial-gradient(circle at 60% 40%, rgba(239, 68, 68, 0.2), transparent 70%), linear-gradient(135deg, #181d28 0%, #0a0d14 100%)',
-                    filter: 'blur(3px)',
+                    filter: 'blur(1px)',
                   }}
                 >
-                  <span className="layer-tag left">Standard Blur</span>
+                  <span className="layer-tag left">Original Stream</span>
                 </div>
 
                 <div
@@ -429,7 +429,7 @@ export default function VeloxLandingShowcase({
                     borderRight: '2px solid #38bdf8',
                   }}
                 >
-                  <span className="layer-tag right">Neural Master 4K</span>
+                  <span className="layer-tag right">Lossless Cut (0.2s)</span>
                 </div>
 
                 <div
@@ -444,16 +444,16 @@ export default function VeloxLandingShowcase({
 
               <div className="bento-spec-grid">
                 <div>
-                  <span className="spec-label">Target Bitrate</span>
-                  <span className="spec-val">32 Mbps Clean</span>
+                  <span className="spec-label">Export Latency</span>
+                  <span className="spec-val">&lt; 0.2s Instant</span>
                 </div>
                 <div>
-                  <span className="spec-label">De-Plastic Guard</span>
-                  <span className="spec-val">Enabled</span>
+                  <span className="spec-label">Transcode Loss</span>
+                  <span className="spec-val">0.00% (None)</span>
                 </div>
                 <div>
-                  <span className="spec-label">Mastering CQ</span>
-                  <span className="spec-val">CQ 14 Uncompressed</span>
+                  <span className="spec-label">Stream Fidelity</span>
+                  <span className="spec-val">100% Bit-Identical</span>
                 </div>
               </div>
             </div>
@@ -538,8 +538,8 @@ export default function VeloxLandingShowcase({
               'your',
               'workstation.',
               'Experience',
-              'cinema-grade',
-              'upscaling',
+              'precision',
+              'compression',
               'and',
               'instant',
               'bitstream',
@@ -637,7 +637,7 @@ export default function VeloxLandingShowcase({
                 }}
               >
                 <Sparkles size={16} />
-                Load 4K Demo Footage
+                Load Demo Footage
               </button>
             </div>
 

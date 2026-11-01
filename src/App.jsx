@@ -698,49 +698,59 @@ export default function App() {
 
       if (effectiveMode === 'lossless') {
         const isCutCompress = activeToolTab === 'cut' && cutMode === 'compress';
+        let nvencSucceeded = false;
         if (nvencAvailable) {
-          const res = await runNativeNvencJob({
-            file: videoFile,
-            workflowMode: isCutCompress ? 'cut_compress' : 'lossless',
-            codec: compressCodec,
-            crf: compressCrf,
-            segments,
-            mergeSegments,
-            losslessStripAudio,
-            onProgress: ({ progress: p, fps, speed }) => {
-              setProgress(p);
-              setEncodingStats((prev) => ({ ...prev, fps: fps || 0, speed: speed || '' }));
-            },
-          });
-          setOutputResult(res);
-        } else if (isCutCompress && (engineType === 'webcodecs' || (typeof window !== 'undefined' && 'VideoEncoder' in window))) {
-          // Hardware-accelerated client-side cut compression via WebCodecs GPU (fast & compact)
-          showToast(`Compressing ${segments.length} scene(s) via WebCodecs GPU...`);
-          const res = await webcodecsCutCompress({
-            file: videoFile,
-            segments,
-            stripAudio: losslessStripAudio,
-            codec: compressCodec,
-            crf: compressCrf,
-            targetVideoKbps: compressRateMode === 'size' ? compressBitratePlan.videoKbps : undefined,
-            onProgress: ({ progress: p, fps, speed }) => {
-              setProgress(p);
-              setEncodingStats((prev) => ({ ...prev, fps: fps || 0, speed: speed || '' }));
-            },
-          });
-          setOutputResult(res);
-        } else {
-          // Instant lossless stream-copy (-c copy, 0.2s)
-          const res = await losslessSplitOrTrim({
-            file: videoFile,
-            segments,
-            mergeSegments,
-            stripAudio: losslessStripAudio,
-            compressCut: isCutCompress,
-            codec: compressCodec,
-            onProgress: ({ progress: p }) => setProgress(p),
-          });
-          setOutputResult(res);
+          try {
+            const res = await runNativeNvencJob({
+              file: videoFile,
+              workflowMode: isCutCompress ? 'cut_compress' : 'lossless',
+              codec: compressCodec,
+              crf: compressCrf,
+              segments,
+              mergeSegments,
+              losslessStripAudio,
+              onProgress: ({ progress: p, fps, speed }) => {
+                setProgress(p);
+                setEncodingStats((prev) => ({ ...prev, fps: fps || 0, speed: speed || '' }));
+              },
+            });
+            setOutputResult(res);
+            nvencSucceeded = true;
+          } catch (nvencErr) {
+            console.warn('Local NVENC runner warning, falling back to client-side GPU pipeline:', nvencErr);
+          }
+        }
+
+        if (!nvencSucceeded) {
+          if (isCutCompress && (engineType === 'webcodecs' || (typeof window !== 'undefined' && 'VideoEncoder' in window))) {
+            // Hardware-accelerated client-side cut compression via WebCodecs GPU (fast & compact)
+            showToast(`Compressing ${segments.length} scene(s) via WebCodecs GPU...`);
+            const res = await webcodecsCutCompress({
+              file: videoFile,
+              segments,
+              stripAudio: losslessStripAudio,
+              codec: compressCodec,
+              crf: compressCrf,
+              targetVideoKbps: compressRateMode === 'size' ? compressBitratePlan.videoKbps : undefined,
+              onProgress: ({ progress: p, fps, speed }) => {
+                setProgress(p);
+                setEncodingStats((prev) => ({ ...prev, fps: fps || 0, speed: speed || '' }));
+              },
+            });
+            setOutputResult(res);
+          } else {
+            // Instant lossless stream-copy (-c copy, 0.2s)
+            const res = await losslessSplitOrTrim({
+              file: videoFile,
+              segments,
+              mergeSegments,
+              stripAudio: losslessStripAudio,
+              compressCut: isCutCompress,
+              codec: compressCodec,
+              onProgress: ({ progress: p }) => setProgress(p),
+            });
+            setOutputResult(res);
+          }
         }
       } else if (engineType === 'nvenc' && nvencAvailable) {
         const res = await runNativeNvencJob({

@@ -40,10 +40,15 @@ export async function runNativeNvencJob({
 
   if (onLog) onLog(`Streaming ${file.name} to Local NVIDIA NVENC GPU Accelerator...`);
 
-  const uploadRes = await fetch(`/api/nvenc-upload?ext=${encodeURIComponent(ext)}`, {
-    method: 'POST',
-    body: file,
-  });
+  let uploadRes;
+  try {
+    uploadRes = await fetch(`/api/nvenc-upload?ext=${encodeURIComponent(ext)}`, {
+      method: 'POST',
+      body: file,
+    });
+  } catch (err) {
+    throw new Error(`Local NVENC upload failed: ${err.message}`);
+  }
 
   if (!uploadRes.ok) {
     throw new Error('Failed to stream source video to local NVENC engine.');

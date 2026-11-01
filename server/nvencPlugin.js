@@ -3,10 +3,18 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 
-const WORK_DIR = path.join(os.tmpdir(), 'veloxcut-nvenc-cache');
-if (!fs.existsSync(WORK_DIR)) {
-  fs.mkdirSync(WORK_DIR, { recursive: true });
+const WORK_DIR = path.join(process.cwd(), '.velox_cache');
+
+function ensureWorkDir() {
+  try {
+    if (!fs.existsSync(WORK_DIR)) {
+      fs.mkdirSync(WORK_DIR, { recursive: true });
+    }
+  } catch (err) {
+    console.error('Failed to create cache dir:', err);
+  }
 }
+ensureWorkDir();
 
 function readJsonBody(req) {
   return new Promise((resolve, reject) => {
@@ -111,26 +119,50 @@ export function nvencAcceleratorPlugin() {
 
         // 2. Fast Raw Binary Upload to Local Temp Cache
         if (req.method === 'POST' && url.pathname === '/api/nvenc-upload') {
+          ensureWorkDir();
+          if (req.socket) req.socket.setTimeout(0);
+          if (res.socket) res.socket.setTimeout(0);
+
           const ext = (url.searchParams.get('ext') || 'mp4').replace(/[^a-zA-Z0-9]/g, '');
           const id = `in_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.${ext}`;
           const filePath = path.join(WORK_DIR, id);
 
           const writeStream = fs.createWriteStream(filePath);
+
           req.pipe(writeStream);
 
-          writeStream.on('finish', () => {
-            res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify({ inputId: id, filePath }));
+          req.on('error', (err) => {
+            console.error('Upload stream req error:', err);
+            try { writeStream.destroy(); } catch {}
+            if (!res.headersSent) {
+              res.statusCode = 500;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({ error: `Upload stream failed: ${err.message}` }));
+            }
           });
+
+          writeStream.on('finish', () => {
+            if (!res.headersSent) {
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({ inputId: id, filePath }));
+            }
+          });
+
           writeStream.on('error', (err) => {
-            res.statusCode = 500;
-            res.end(JSON.stringify({ error: err.message }));
+            console.error('Upload writeStream error:', err);
+            try { req.unpipe(writeStream); } catch {}
+            if (!res.headersSent) {
+              res.statusCode = 500;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({ error: err.message }));
+            }
           });
           return;
         }
 
         // 3. Execute Native NVENC Compress or Native LosslessCut Split/Trim
         if (req.method === 'POST' && url.pathname === '/api/nvenc-job') {
+          ensureWorkDir();
           res.setHeader('Content-Type', 'application/x-ndjson');
           res.setHeader('Cache-Control', 'no-cache');
 

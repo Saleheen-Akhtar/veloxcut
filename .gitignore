@@ -16,3 +16,4 @@ dist-ssr/
 Thumbs.db
 .agents/
 skills-lock.json
+.velox_cache/

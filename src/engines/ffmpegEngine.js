@@ -65,8 +65,35 @@ export async function losslessSplitOrTrim({
   const outExt = compressCut ? 'mp4' : (['mp4', 'mov', 'mkv', 'webm'].includes(ext) ? ext : 'mp4');
   const inputName = `input_lossless.${ext}`;
 
+  // Guard: FFmpeg.wasm heap is limited to ~2 GB. For large files, use a blob URL
+  // which fetchFile can stream rather than copying the entire file into WASM memory.
+  const FILE_SIZE_LIMIT = 1.8 * 1024 * 1024 * 1024; // 1.8 GB
+  let fileObjectURL = null;
+  let fileDataSource;
+  if (file.size > FILE_SIZE_LIMIT) {
+    if (onLog) onLog(`Large file detected (${(file.size / 1e9).toFixed(2)} GB) — using URL streaming mode to avoid WASM memory limits...`);
+    fileObjectURL = URL.createObjectURL(file);
+    fileDataSource = fileObjectURL;
+  } else {
+    fileDataSource = file;
+  }
+
   if (onLog) onLog(`Mounting ${file.name} into WASM memory...`);
-  await ffmpeg.writeFile(inputName, await fetchFile(file));
+  let writeError = null;
+  try {
+    await ffmpeg.writeFile(inputName, await fetchFile(fileDataSource));
+  } catch (err) {
+    writeError = err;
+  } finally {
+    if (fileObjectURL) URL.revokeObjectURL(fileObjectURL);
+  }
+  if (writeError) {
+    throw new Error(
+      `File could not be loaded into WASM (${(file.size / 1e9).toFixed(2)} GB). ` +
+      `Try splitting a shorter clip first, or use the Compress tab for large files. ` +
+      `(Internal: ${writeError.message})`
+    );
+  }
 
   const activeSegments = segments.filter((s) => s.end - s.start > 0.05);
   const segmentOutputs = [];

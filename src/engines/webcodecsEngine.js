@@ -8,16 +8,6 @@ import {
   Conversion,
 } from 'mediabunny';
 
-function crfToHardwareBitrateBps({ width, height, fps, crf, codec }) {
-  const pixelsPerSec = width * height * fps;
-  const baseBpp = 0.026; // High-efficiency web compression (~1.6 Mbps for 1080p@30fps)
-  const crfMultiplier = Math.pow(2, (24 - crf) / 6);
-  const codecFactor = codec === 'av1' ? 0.65 : codec === 'hevc' ? 0.75 : 1.0;
-
-  const rawBps = pixelsPerSec * baseBpp * crfMultiplier * codecFactor;
-  return Math.max(80_000, Math.min(18_000_000, Math.round(rawBps)));
-}
-
 /**
  * Pure-browser hardware-accelerated WebCodecs pipeline powered by Mediabunny.
  * Demuxes packets directly from the File Blob -> Hardware VideoDecoder -> Hardware VideoEncoder
@@ -41,8 +31,10 @@ export async function webcodecsGpuCompress({
 }) {
   const startWall = performance.now();
 
-  const targetW = Math.max(2, Math.round(width / 2) * 2);
-  const targetH = Math.max(2, Math.round(height / 2) * 2);
+  // If width/height not provided (e.g. cut-only mode), omit them so Mediabunny keeps original resolution
+  const hasExplicitDims = Number(width) > 0 && Number(height) > 0;
+  const targetW = hasExplicitDims ? Math.max(2, Math.round(Number(width) / 2) * 2) : undefined;
+  const targetH = hasExplicitDims ? Math.max(2, Math.round(Number(height) / 2) * 2) : undefined;
   const numericFps = Number(fps) && fps !== 'original' ? Number(fps) : undefined;
   const clipDuration = Math.max(0.2, endTime - startTime);
   const estTotalFrames = Math.max(1, Math.round(clipDuration * (numericFps || 30)));
@@ -54,23 +46,30 @@ export async function webcodecsGpuCompress({
   };
   const targetCodec = codecMap[codec] || 'avc';
 
-  const bitrateBps =
-    rateControlMode === 'size'
-      ? Math.max(80_000, Math.round(targetVideoKbps * 1000))
-      : crfToHardwareBitrateBps({
-          width: targetW,
-          height: targetH,
-          fps: numericFps || 30,
-          crf,
-          codec,
-        });
+  // Compute quality value for Mediabunny's quality-based API (0–1 float, higher = better quality)
+  // CRF 18 (near-lossless) → quality ~0.9, CRF 24 (balanced) → quality ~0.55, CRF 32 (small) → quality ~0.25
+  const crfQuality = Math.max(0.05, Math.min(0.95, (51 - Math.max(0, Math.min(51, crf))) / 51));
 
+  // For size mode: compute bitrate in bps (must be a positive integer for Mediabunny)
+  const targetBitrateInt =
+    rateControlMode === 'size' && Number(targetVideoKbps) > 0
+      ? Math.max(80_000, Math.round(Number(targetVideoKbps) * 1000))
+      : null;
+
+  // Logging
   if (onLog) {
-    onLog(
-      `Starting Mediabunny WebCodecs Direct Pipeline (${targetCodec.toUpperCase()} @ ${targetW}x${targetH}, ${(
-        bitrateBps / 1000
-      ).toFixed(0)} kbps)...`
-    );
+    const dimStr = hasExplicitDims ? `${targetW}x${targetH}` : 'native res';
+    if (targetBitrateInt) {
+      onLog(
+        `Starting Mediabunny WebCodecs Direct Pipeline (${targetCodec.toUpperCase()} @ ${dimStr}, ${(
+          targetBitrateInt / 1000
+        ).toFixed(0)} kbps)...`
+      );
+    } else {
+      onLog(
+        `Starting Mediabunny WebCodecs Direct Pipeline (${targetCodec.toUpperCase()} @ ${dimStr}, CRF ${crf} → quality ${crfQuality.toFixed(2)})...`
+      );
+    }
   }
 
   const input = new Input({
@@ -84,15 +83,17 @@ export async function webcodecsGpuCompress({
     target,
   });
 
+  // Build video options: use quality-based API for CRF mode, bitrate integer for size mode
+  // Only include width/height/fit when explicitly resizing (otherwise Mediabunny keeps native res)
   const videoOptions = {
-    width: targetW,
-    height: targetH,
-    fit: 'contain',
     codec: targetCodec,
-    bitrate: bitrateBps,
     hardwareAcceleration: 'prefer-hardware',
     latencyMode: 'quality',
     forceTranscode: true,
+    ...(hasExplicitDims ? { width: targetW, height: targetH, fit: 'contain' } : {}),
+    ...(targetBitrateInt
+      ? { bitrate: targetBitrateInt }
+      : { quality: crfQuality }),
   };
   if (numericFps) {
     videoOptions.frameRate = numericFps;

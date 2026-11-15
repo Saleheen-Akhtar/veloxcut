@@ -2,8 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import {
-  Sparkles,
-  Zap,
   Scissors,
   ArrowRight,
   ShieldCheck,
@@ -15,6 +13,7 @@ import {
   Film,
   Download,
   RotateCcw,
+  Play,
 } from 'lucide-react';
 
 gsap.registerPlugin(ScrollTrigger);
@@ -229,29 +228,17 @@ export default function VeloxLandingShowcase({
         </header>
       </nav>
 
-      {/* 2. ATTENTION (HERO): CINEMATIC CENTER ARCHITECTURE */}
+      {/* 2. HERO */}
       <section ref={heroRef} className="hero-cinematic-section">
-        <div className="hero-backdrop-wash" />
-        <div className="hero-radial-glow" />
-
         <div className="hero-content-boundary">
           <div className="hero-editorial-group">
             <h1 className="hero-h1-editorial">
-              High-Speed Precision Cutting
-              <span
-                className="inline-pill-image"
-                style={{
-                  background:
-                    'radial-gradient(circle at 35% 35%, #38bdf8 0%, #6366f1 55%, #0f172a 100%)',
-                  boxShadow: '0 0 20px rgba(56, 189, 248, 0.45), inset 0 0 10px rgba(255, 255, 255, 0.35)',
-                }}
-              />
-              for Any Video Format
+              Lossless video trimming and GPU compression
             </h1>
 
             <p className="hero-subtitle-editorial">
-              Perform sub-second stream-copy cuts with zero transcoding, or compress heavy footage
-              into ultra-compact H.264 files ready for Grok, Discord, and messaging.
+              Perform instant stream-copy cuts with zero transcoding, or compress footage into compact
+              H.264 and HEVC files using hardware acceleration.
             </p>
 
             <div className="hero-action-row">
@@ -260,8 +247,8 @@ export default function VeloxLandingShowcase({
                 className="btn-primary-hero"
                 onClick={onLaunchStudio}
               >
-                Launch Studio Workspace
-                <ArrowRight size={16} />
+                Open studio
+                <ArrowRight size={14} />
               </button>
 
               <button
@@ -269,8 +256,8 @@ export default function VeloxLandingShowcase({
                 className="btn-secondary-hero"
                 onClick={onLoadDemo}
               >
-                <Sparkles size={16} />
-                Load Interactive Demo Clip
+                <Play size={14} />
+                Load sample clip
               </button>
             </div>
           </div>
@@ -288,7 +275,7 @@ export default function VeloxLandingShowcase({
                   veloxcut_lossless_timeline.mp4
                 </div>
                 <div className="mockup-engine-indicator">
-                  1080p FHD • 60 FPS
+                  1080p • 60 fps
                 </div>
               </div>
 
@@ -298,25 +285,18 @@ export default function VeloxLandingShowcase({
                 role="button"
                 tabIndex={0}
               >
-                <div
-                  className="mockup-video-bg"
-                  style={{
-                    background:
-                      'radial-gradient(ellipse at 50% 35%, rgba(56, 189, 248, 0.18) 0%, rgba(99, 102, 241, 0.08) 50%, #06080d 100%)',
-                    backgroundColor: '#07090e',
-                  }}
-                >
+                <div className="mockup-video-bg">
                   <div className="mockup-split-overlay">
-                    <div className="mockup-split-label left">Original Stream</div>
+                    <div className="mockup-split-label left">Source stream</div>
                     <div className="mockup-split-divider" />
-                    <div className="mockup-split-label right">Lossless Cut (0.2s)</div>
+                    <div className="mockup-split-label right">Trimmed segment (0.2s)</div>
                   </div>
 
                   <div className="mockup-center-prompt">
                     <div className="prompt-play-glyph">
-                      <Maximize2 size={24} />
+                      <Maximize2 size={18} />
                     </div>
-                    <span>Click to Enter Full NLE Workspace</span>
+                    <span>Enter studio workspace</span>
                   </div>
                 </div>
 
@@ -332,7 +312,7 @@ export default function VeloxLandingShowcase({
                     <div className="clip-handle-start" />
                     <div className="clip-body-preview">
                       <span className="clip-label-text">
-                        Scene 01_Lossless_Cut.mp4
+                        scene_01_trimmed.mp4
                       </span>
                     </div>
                     <div className="clip-handle-end" />
@@ -344,27 +324,25 @@ export default function VeloxLandingShowcase({
         </div>
       </section>
 
-      {/* 3. INFINITE MARQUEE (HARDWARE STACK) */}
+      {/* 3. HARDWARE CAPABILITIES STRIP */}
       <section className="marquee-strip-section">
         <div className="marquee-viewport">
           <div className="marquee-content-track">
             {[
-              'NVIDIA NVENC DUAL GEN-8',
-              'WEBM & MP4 LOSSLESS MUX',
-              'CONTRAST-ADAPTIVE CAS 0.65',
-              'AV1 SILICON CODEC',
-              'HEVC MAIN 10-BIT',
-              'WEBAUDIO ZERO-LATENCY DSP',
-              'CLIENT-SIDE LOCAL ENCODING',
-              'KEYFRAME-ACCURATE CUTS',
-              'NVIDIA NVENC DUAL GEN-8',
-              'WEBM & MP4 LOSSLESS MUX',
-              'CONTRAST-ADAPTIVE CAS 0.65',
-              'AV1 SILICON CODEC',
-              'HEVC MAIN 10-BIT',
-              'WEBAUDIO ZERO-LATENCY DSP',
-              'CLIENT-SIDE LOCAL ENCODING',
-              'KEYFRAME-ACCURATE CUTS',
+              'Lossless stream-copy',
+              'NVIDIA NVENC hardware encoding',
+              'WebCodecs GPU pipeline',
+              'In-memory MP4 remuxing',
+              'H.264 & HEVC export',
+              'Zero cloud uploads',
+              'Tabular audio sync',
+              'Lossless stream-copy',
+              'NVIDIA NVENC hardware encoding',
+              'WebCodecs GPU pipeline',
+              'In-memory MP4 remuxing',
+              'H.264 & HEVC export',
+              'Zero cloud uploads',
+              'Tabular audio sync',
             ].map((item, idx) => (
               <div key={idx} className="marquee-pill-item">
                 <span className="pill-dot" />
@@ -375,33 +353,32 @@ export default function VeloxLandingShowcase({
         </div>
       </section>
 
-      {/* 4. INTEREST: MATHEMATICALLY GAPLESS BENTO GRID */}
+      {/* 4. TECHNICAL FEATURES GRID */}
       <section id="bento-tech" className="bento-editorial-section">
         <div className="section-header-block">
           <h2 className="section-h2-title">
-            Engineered for Precision Video Operations
+            Engineered for local video operations
           </h2>
           <p className="section-p-subtitle">
-            Every feature runs independently with zero unwanted compression side-effects.
+            Fast stream operations with zero cloud uploads or generational quality loss.
           </p>
         </div>
 
-        {/* 4-column, 2-row mathematically interlocking grid (8/8 cells filled) */}
         <div className="bento-grid-container">
-          {/* Card A: Lossless Stream Splitter with interactive comparison (Col span 2, Row span 2 = 4 cells) */}
+          {/* Card A: Lossless Stream Splitter with comparison */}
           <div className="bento-cell bento-hero-wipe col-span-2 row-span-2">
             <div className="bento-card-inner">
               <div className="bento-badge-row">
-                <span className="badge-technical">Lossless Stream-Copy</span>
-                <span className="badge-highlight">0.2s Instant Cut</span>
+                <span className="badge-technical">Stream-copy</span>
+                <span className="badge-highlight">&lt; 0.2s export</span>
               </div>
 
               <h3 className="bento-h3-title">
-                Zero-Transcode Precision Cutting
+                Zero-transcode stream trimming
               </h3>
               <p className="bento-p-body">
-                Split, trim, and export multi-scene video clips in milliseconds without re-encoding a single frame.
-                100% original video &amp; audio fidelity with zero generational loss.
+                Split and trim multi-scene video clips in milliseconds without re-encoding frames.
+                Original video and audio bitstreams remain bit-identical.
               </p>
 
               <div
@@ -409,27 +386,15 @@ export default function VeloxLandingShowcase({
                 className="interactive-wipe-stage"
                 onPointerDown={() => setIsWipeDragging(true)}
               >
-                <div
-                  className="wipe-layer-base"
-                  style={{
-                    background:
-                      'radial-gradient(circle at 60% 40%, rgba(239, 68, 68, 0.2), transparent 70%), linear-gradient(135deg, #181d28 0%, #0a0d14 100%)',
-                    filter: 'blur(1px)',
-                  }}
-                >
-                  <span className="layer-tag left">Original Stream</span>
+                <div className="wipe-layer-base">
+                  <span className="layer-tag left">Source stream</span>
                 </div>
 
                 <div
                   className="wipe-layer-sharp"
-                  style={{
-                    width: `${wipePosition}%`,
-                    background:
-                      'radial-gradient(circle at 40% 40%, rgba(56, 189, 248, 0.35), transparent 70%), linear-gradient(135deg, #0e2030 0%, #071018 100%)',
-                    borderRight: '2px solid #38bdf8',
-                  }}
+                  style={{ width: `${wipePosition}%` }}
                 >
-                  <span className="layer-tag right">Lossless Cut (0.2s)</span>
+                  <span className="layer-tag right">Trimmed segment</span>
                 </div>
 
                 <div
@@ -437,91 +402,90 @@ export default function VeloxLandingShowcase({
                   style={{ left: `${wipePosition}%` }}
                 >
                   <div className="handle-pip">
-                    <Sliders size={12} />
+                    <Sliders size={11} />
                   </div>
                 </div>
               </div>
 
               <div className="bento-spec-grid">
                 <div>
-                  <span className="spec-label">Export Latency</span>
-                  <span className="spec-val">&lt; 0.2s Instant</span>
+                  <span className="spec-label">Export latency</span>
+                  <span className="spec-val">&lt; 0.2s</span>
                 </div>
                 <div>
-                  <span className="spec-label">Transcode Loss</span>
-                  <span className="spec-val">0.00% (None)</span>
+                  <span className="spec-label">Transcode loss</span>
+                  <span className="spec-val">0.00%</span>
                 </div>
                 <div>
-                  <span className="spec-label">Stream Fidelity</span>
-                  <span className="spec-val">100% Bit-Identical</span>
+                  <span className="spec-label">Stream fidelity</span>
+                  <span className="spec-val">Bit-identical</span>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Card B: NVENC Hardware Accelerator (Col span 2, Row span 1 = 2 cells) */}
+          {/* Card B: Hardware Accelerator */}
           <div className="bento-cell bento-nvenc col-span-2 row-span-1">
             <div className="bento-card-inner">
               <div className="bento-badge-row">
-                <span className="badge-technical">Silicon Direct</span>
-                <span className="badge-highlight">NVIDIA NVENC Engine</span>
+                <span className="badge-technical">Hardware encoder</span>
+                <span className="badge-highlight">NVENC &amp; WebCodecs</span>
               </div>
-              <h3 className="bento-h3-title">Zero-CPU Hardware Encoding</h3>
+              <h3 className="bento-h3-title">Local GPU acceleration</h3>
               <p className="bento-p-body">
-                Direct integration with local GPU silicon delivers up to 12x real-time speed.
-                Compress 1 GB files in under 3 seconds without fan noise.
+                Direct integration with local GPU silicon delivers fast encoding without browser freezing.
               </p>
 
               <div className="nvenc-meter-bar">
                 <div className="meter-label-row">
-                  <span>Encoding Speed Benchmark</span>
-                  <span className="meter-stat">380 FPS Average</span>
+                  <span>Encoding throughput</span>
+                  <span className="meter-stat">Hardware accelerated</span>
                 </div>
                 <div className="meter-track">
-                  <div className="meter-fill" style={{ width: '92%' }} />
+                  <div className="meter-fill" style={{ width: '85%' }} />
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Card C: Lossless Bitstream Cutter (Col span 1, Row span 1 = 1 cell) */}
+          {/* Card C: Lossless Bitstream Cutter */}
           <div className="bento-cell bento-cutter col-span-1 row-span-1">
             <div className="bento-card-inner">
               <div className="bento-badge-row">
-                <span className="badge-technical">LosslessCut</span>
+                <span className="badge-technical">Precision</span>
               </div>
-              <h3 className="bento-h3-title">Keyframe Stream Cut</h3>
+              <h3 className="bento-h3-title">Keyframe cuts</h3>
               <p className="bento-p-body">
-                Split, splice, and trim clips without re-encoding a single frame. Zero quality degradation.
+                Split and extract scenes cleanly with exact keyframe boundary detection.
               </p>
               <div className="cutter-status-pill">
-                <Check size={14} />
-                <span>0.00% Quality Loss</span>
+                <Check size={13} />
+                <span>Lossless stream copy</span>
               </div>
             </div>
           </div>
 
-          {/* Card D: Psycho-Visual Compression (Col span 1, Row span 1 = 1 cell) */}
+          {/* Card D: Target Size Control */}
           <div className="bento-cell bento-compress col-span-1 row-span-1">
             <div className="bento-card-inner">
               <div className="bento-badge-row">
-                <span className="badge-technical">Psycho-Visual</span>
+                <span className="badge-technical">Rate control</span>
               </div>
-              <h3 className="bento-h3-title">Target Size Control</h3>
+              <h3 className="bento-h3-title">Target size control</h3>
               <p className="bento-p-body">
-                Hit exact Discord 10 MB or Web 25 MB targets with intelligent rate control curves.
+                Calibrated bitrate curves match Discord 10 MB and Web 25 MB limits cleanly.
               </p>
               <div className="compress-preset-tags">
                 <span className="preset-chip">Discord 10MB</span>
                 <span className="preset-chip">Web 25MB</span>
-                <span className="preset-chip">CRF 20 HQ</span>
+                <span className="preset-chip">CRF 24</span>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* 5. DESIRE: SCRUBBING REVEAL & HORIZONTAL ACCORDIONS */}
+      {/* 5. ARCHITECTURE PIPELINE */}
       <section id="pipeline" className="pipeline-scrub-section">
         <div className="scrub-container">
           <div ref={scrubTextRef} className="scrub-headline-block">
@@ -529,25 +493,18 @@ export default function VeloxLandingShowcase({
               'Direct',
               'silicon',
               'encoding',
-              'means',
+              'keeps',
               'your',
-              'raw',
               'media',
-              'never',
-              'leaves',
-              'your',
-              'workstation.',
+              'private.',
               'Experience',
-              'precision',
-              'compression',
-              'and',
               'instant',
-              'bitstream',
-              'cuts',
-              'with',
-              'zero',
-              'cloud',
-              'latency.',
+              'stream-copy',
+              'cutting',
+              'and',
+              'calibrated',
+              'compression',
+              'locally.',
             ].map((word, i) => (
               <span key={i} className="scrub-word">
                 {word}{' '}
@@ -555,9 +512,28 @@ export default function VeloxLandingShowcase({
             ))}
           </div>
 
-          {/* Horizontal Accordion */}
+          {/* Clean Horizontal Accordion */}
           <div className="horizontal-accordion-container">
-            {accordionItems.map((item, idx) => (
+            {[
+              {
+                title: 'Lossless stream copy',
+                subtitle: 'Zero re-encoding',
+                description: 'Trims multi-gigabyte video clips in under 0.2s by copying container bitstreams directly without uncompressing frames.',
+                metric: '0.2s latency',
+              },
+              {
+                title: 'Hardware GPU encoder',
+                subtitle: 'NVENC and WebCodecs',
+                description: 'Direct GPU silicon encoding delivers smooth compression with calibrated constant-quality rate curves.',
+                metric: 'Local GPU',
+              },
+              {
+                title: 'In-browser processing',
+                subtitle: 'Zero cloud transfers',
+                description: 'Container demuxing and remuxing occur in local browser memory. Files never leave your workstation.',
+                metric: '100% private',
+              },
+            ].map((item, idx) => (
               <div
                 key={idx}
                 className={`accordion-slice ${
@@ -566,14 +542,6 @@ export default function VeloxLandingShowcase({
                 onMouseEnter={() => setActiveAccordion(idx)}
                 onClick={() => setActiveAccordion(idx)}
               >
-                <div
-                  className="accordion-bg-layer"
-                  style={{
-                    background: item.gradient,
-                  }}
-                />
-                <div className="accordion-overlay" />
-
                 <div className="accordion-content">
                   <div className="accordion-top-row">
                     <span className="accordion-index">{`0${idx + 1}`}</span>
@@ -596,7 +564,7 @@ export default function VeloxLandingShowcase({
         </div>
       </section>
 
-      {/* 6. ACTION: MASSIVE CALL TO ACTION & DRAG DROP ZONE */}
+      {/* 6. CALL TO ACTION & DROPZONE */}
       <section id="architecture" className="action-cta-section">
         <div
           className={`action-dropzone-card ${
@@ -604,15 +572,13 @@ export default function VeloxLandingShowcase({
           }`}
           onClick={onLaunchStudio}
         >
-          <div className="action-glow-orb" />
-
           <div className="action-inner-content">
-            <span className="action-eyebrow">Local Silicon Engine</span>
+            <span className="action-eyebrow">Local processing</span>
             <h2 className="action-h2-large">
-              Start Editing at the Speed of Silicon
+              Start editing video
             </h2>
             <p className="action-p-sub">
-              Drop any MP4, MKV, or MOV file directly here, or launch the studio workspace to begin.
+              Drop any MP4, MKV, or MOV file to begin, or open the studio workspace.
             </p>
 
             <div className="action-buttons-group">
@@ -624,8 +590,8 @@ export default function VeloxLandingShowcase({
                   onLaunchStudio();
                 }}
               >
-                Open Studio Workspace
-                <ArrowRight size={16} />
+                Open studio workspace
+                <ArrowRight size={14} />
               </button>
 
               <button
@@ -636,8 +602,8 @@ export default function VeloxLandingShowcase({
                   onLoadDemo();
                 }}
               >
-                <Sparkles size={16} />
-                Load Demo Footage
+                <Play size={14} />
+                Load sample clip
               </button>
             </div>
 
@@ -658,7 +624,7 @@ export default function VeloxLandingShowcase({
               VELOX<span className="accent">CUT</span>
             </span>
             <span className="footer-tagline">
-              Precision In-Browser NLE & GPU Mastering Suite
+              Browser-native video trimmer &amp; GPU compressor
             </span>
           </div>
 
@@ -668,29 +634,21 @@ export default function VeloxLandingShowcase({
               className="footer-link-btn"
               onClick={onLaunchStudio}
             >
-              Studio Editor
+              Studio editor
             </button>
             <button
               type="button"
               className="footer-link-btn"
               onClick={onLoadDemo}
             >
-              Demo Clip
+              Sample clip
             </button>
-            <a
-              href="https://github.com/Leonxlnx/taste-skill"
-              target="_blank"
-              rel="noreferrer"
-              className="footer-link-btn"
-            >
-              Taste System
-            </a>
           </div>
         </div>
 
         <div className="footer-bottom-row">
-          <span>Zero cloud telemetry. Client-side local memory processing.</span>
-          <span>Version 1.4.0 Studio Release</span>
+          <span>Client-side local memory processing. Zero cloud telemetry.</span>
+          <span>VeloxCut Studio</span>
         </div>
       </footer>
     </main>

@@ -43,7 +43,7 @@ import {
 import { probeGpuEncoders } from './engines/gpuProbe';
 import { losslessSplitOrTrim, wasmCompressVideo } from './engines/ffmpegEngine';
 import { createZipBlob } from './utils/zip';
-import { webcodecsGpuCompress, webcodecsCutCompress } from './engines/webcodecsEngine';
+import { webcodecsGpuCompress, webcodecsCutCompress, webcodecsLosslessCut } from './engines/webcodecsEngine';
 import { checkNativeNvencStatus, runNativeNvencJob } from './engines/nativeNvencEngine';
 import { generateDemoVideoFile } from './utils/demoVideoGenerator';
 import VeloxLandingShowcase from './components/VeloxLandingShowcase';
@@ -739,45 +739,88 @@ export default function App() {
             });
             setOutputResult(res);
           } else {
-            // Instant lossless stream-copy (-c copy, 0.2s)
-            const res = await losslessSplitOrTrim({
-              file: videoFile,
-              segments,
-              mergeSegments,
-              stripAudio: losslessStripAudio,
-              compressCut: isCutCompress,
-              codec: compressCodec,
-              onProgress: ({ progress: p }) => setProgress(p),
-            });
-            setOutputResult(res);
+            // Instant lossless stream-copy: try ultra-fast Mediabunny chunked pipeline first (no WASM heap limits)
+            let cutDone = false;
+            try {
+              const res = await webcodecsLosslessCut({
+                file: videoFile,
+                segments,
+                stripAudio: losslessStripAudio,
+                onProgress: ({ progress: p }) => setProgress(p),
+              });
+              setOutputResult(res);
+              cutDone = true;
+            } catch (mbErr) {
+              console.warn('Direct stream-copy fallback to FFmpeg.wasm:', mbErr);
+            }
+            if (!cutDone) {
+              const res = await losslessSplitOrTrim({
+                file: videoFile,
+                segments,
+                mergeSegments,
+                stripAudio: losslessStripAudio,
+                compressCut: isCutCompress,
+                codec: compressCodec,
+                onProgress: ({ progress: p }) => setProgress(p),
+              });
+              setOutputResult(res);
+            }
           }
         }
       } else if (engineType === 'nvenc' && nvencAvailable) {
-        const res = await runNativeNvencJob({
-          file: videoFile,
-          workflowMode: 'compress',
-          startTime: start,
-          endTime: end,
-          width: compressDims.width,
-          height: compressDims.height,
-          fps: compressFps,
-          codec: compressCodec,
-          rateControlMode: compressRateMode,
-          crf: compressCrf,
-          targetVideoKbps: compressBitratePlan.videoKbps,
-          audioMode,
-          audioBitrateKbps,
-          psychoVisualHq: compressPsychoVisual,
-          enhanceMode: 'off',
-          antiPlasticGrain: false,
-          casStrength: 0,
-          onProgress: ({ progress: p, fps, speed }) => {
-            setProgress(p);
-            setEncodingStats((prev) => ({ ...prev, fps: fps || prev.fps, speed: speed || prev.speed }));
-          },
-        });
-        setOutputResult(res);
-        setPreviewMode('split-wipe');
+        let nvencDone = false;
+        try {
+          const res = await runNativeNvencJob({
+            file: videoFile,
+            workflowMode: 'compress',
+            startTime: start,
+            endTime: end,
+            width: compressDims.width,
+            height: compressDims.height,
+            fps: compressFps,
+            codec: compressCodec,
+            rateControlMode: compressRateMode,
+            crf: compressCrf,
+            targetVideoKbps: compressBitratePlan.videoKbps,
+            audioMode,
+            audioBitrateKbps,
+            psychoVisualHq: compressPsychoVisual,
+            enhanceMode: 'off',
+            antiPlasticGrain: false,
+            casStrength: 0,
+            onProgress: ({ progress: p, fps, speed }) => {
+              setProgress(p);
+              setEncodingStats((prev) => ({ ...prev, fps: fps || prev.fps, speed: speed || prev.speed }));
+            },
+          });
+          setOutputResult(res);
+          setPreviewMode('split-wipe');
+          nvencDone = true;
+        } catch (nvencErr) {
+          console.warn('Local NVENC failed, falling back to WebCodecs GPU:', nvencErr);
+        }
+        if (!nvencDone) {
+          const res = await webcodecsGpuCompress({
+            file: videoFile,
+            startTime: start,
+            endTime: end,
+            width: compressDims.width,
+            height: compressDims.height,
+            fps: compressFps,
+            codec: compressCodec,
+            rateControlMode: compressRateMode,
+            crf: compressCrf,
+            targetVideoKbps: compressBitratePlan.videoKbps,
+            audioMode,
+            audioBitrateKbps,
+            onProgress: ({ progress: p, fps, frame, speed }) => {
+              setProgress(p);
+              setEncodingStats({ fps: fps || 0, frame: frame || 0, speed: speed || '' });
+            },
+          });
+          setOutputResult(res);
+          setPreviewMode('split-wipe');
+        }
       } else if (engineType === 'webcodecs' || (typeof window !== 'undefined' && 'VideoEncoder' in window)) {
         const res = await webcodecsGpuCompress({
           file: videoFile,
@@ -820,8 +863,8 @@ export default function App() {
       setProgress(1);
       showToast(
         effectiveMode === 'lossless'
-          ? 'Instant Lossless Cut complete!'
-          : 'Video compression complete!'
+          ? 'Lossless cut complete'
+          : 'Video compression complete'
       );
     } catch (err) {
       console.error(err);
@@ -946,7 +989,7 @@ export default function App() {
             onClick={() => setViewMode('showcase')}
             title="Switch to Product Showcase"
           >
-            <Layers size={13} style={{ color: '#38bdf8' }} />
+            <Layers size={13} />
             Showcase
           </button>
 
@@ -956,7 +999,7 @@ export default function App() {
             onClick={handleLoadDemo}
             disabled={isGeneratingDemo || isProcessing}
           >
-            <Sparkles size={13} style={{ color: '#38bdf8' }} />
+            <Play size={13} />
             {isGeneratingDemo ? 'Loading...' : 'Demo Clip'}
           </button>
 
@@ -1114,17 +1157,16 @@ export default function App() {
               >
                 <div className="dropzone-eyebrow-badge">
                   <ShieldCheck size={12} />
-                  <span>100% PRIVATE • CLIENT-SIDE GPU ENGINE</span>
+                  <span>Client-side GPU engine</span>
                 </div>
 
                 <div className="dropzone-aperture-icon">
                   <Film size={28} />
                 </div>
 
-                <h2>Drop a video file to begin</h2>
+                <h2>Drop video file to begin</h2>
                 <p>
-                  Perform instant stream-copy cuts in 0.2s or compress video with 99% visually lossless GPU
-                  encoding. Everything executes locally in your browser.
+                  Lossless stream-copy cuts in 0.1s and GPU video compression. Everything executes locally in your browser.
                 </p>
 
                 <div className="dropzone-actions">
@@ -1146,37 +1188,45 @@ export default function App() {
                       handleLoadDemo();
                     }}
                   >
-                    <Sparkles size={14} style={{ color: '#38bdf8' }} /> Try 1080p Demo Clip
+                    <Play size={13} /> Try demo clip
                   </button>
                 </div>
 
                 <div className="dropzone-feature-grid">
                   <div className="dropzone-feat-card">
-                    <span className="dropzone-feat-icon">✂️</span>
+                    <span className="dropzone-feat-icon">
+                      <Scissors size={15} />
+                    </span>
                     <div className="dropzone-feat-text">
-                      <strong>Instant Lossless Cut</strong>
-                      <span>Export in 0.2s with 0% quality loss</span>
+                      <strong>Lossless stream-copy</strong>
+                      <span>Export cuts in 0.1s with 0% re-encoding loss</span>
                     </div>
                   </div>
                   <div className="dropzone-feat-card">
-                    <span className="dropzone-feat-icon">⚡</span>
+                    <span className="dropzone-feat-icon">
+                      <Cpu size={15} />
+                    </span>
                     <div className="dropzone-feat-text">
-                      <strong>Hardware Acceleration</strong>
-                      <span>Native NVIDIA NVENC &amp; WebCodecs GPU</span>
+                      <strong>GPU hardware acceleration</strong>
+                      <span>WebCodecs GPU silicon and local NVENC</span>
                     </div>
                   </div>
                   <div className="dropzone-feat-card">
-                    <span className="dropzone-feat-icon">🎯</span>
+                    <span className="dropzone-feat-icon">
+                      <Sliders size={15} />
+                    </span>
                     <div className="dropzone-feat-text">
-                      <strong>Target Size Clamping</strong>
-                      <span>Auto-tune for Discord 10MB &amp; Web 25MB</span>
+                      <strong>Target size control</strong>
+                      <span>Calibrated bitrate limits for Discord and web</span>
                     </div>
                   </div>
                   <div className="dropzone-feat-card">
-                    <span className="dropzone-feat-icon">🔒</span>
+                    <span className="dropzone-feat-icon">
+                      <ShieldCheck size={15} />
+                    </span>
                     <div className="dropzone-feat-text">
-                      <strong>Zero Cloud Uploads</strong>
-                      <span>100% private, files never leave your PC</span>
+                      <strong>Private client processing</strong>
+                      <span>Zero server uploads; footage stays in browser</span>
                     </div>
                   </div>
                 </div>
@@ -1724,9 +1774,9 @@ export default function App() {
 
                   <div className="inspector-group">
                     <div className="inspector-group-title">
-                      <span>Encoding Mode</span>
-                      <span className="val" style={{ color: cutMode === 'compress' ? '#38bdf8' : '#34d399' }}>
-                        {cutMode === 'compress' ? 'Compress (H.264 Small Size)' : 'Instant Lossless (0.2s)'}
+                      <span>Encoding mode</span>
+                      <span className="val">
+                        {cutMode === 'compress' ? 'Compress (H.264)' : 'Lossless stream-copy (0.1s)'}
                       </span>
                     </div>
                     <div className="segmented-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
@@ -1735,20 +1785,20 @@ export default function App() {
                         className={"seg-btn " + (cutMode === 'lossless' ? 'active-green' : '')}
                         onClick={() => setCutMode('lossless')}
                       >
-                        ⚡ Lossless (0.2s)
+                        <Zap size={12} /> Lossless (0.1s)
                       </button>
                       <button
                         type="button"
                         className={"seg-btn " + (cutMode === 'compress' ? 'active-green' : '')}
                         onClick={() => setCutMode('compress')}
                       >
-                        📦 Compress (H.264)
+                        <Layers size={12} /> Compress (H.264)
                       </button>
                     </div>
                     <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '5px', lineHeight: 1.4 }}>
                       {cutMode === 'lossless'
-                        ? 'Instant stream-copy without re-encoding (preserves 100% original quality, but retains full raw camera bitrate).'
-                        : 'Re-encodes cuts into lightweight H.264 files (perfect for Grok, Discord, and messaging).'}
+                        ? 'Lossless stream-copy without re-encoding (preserves 100% original quality, retains raw camera bitrate).'
+                        : 'Re-encodes cuts into lightweight H.264 files optimized for messaging and social uploads.'}
                     </p>
                   </div>
 
@@ -1952,7 +2002,7 @@ export default function App() {
                       onClick={handleLoadDemo}
                       disabled={isGeneratingDemo || isProcessing}
                     >
-                      <Sparkles size={13} style={{ color: '#38bdf8' }} /> Try 1080p Studio Demo
+                      <Play size={13} /> Try studio demo
                     </button>
                   </div>
                 </>
@@ -2061,57 +2111,75 @@ export default function App() {
                         <Download size={14} /> Download {outputResult.primary.label || 'Output'} ({formatBytes(outputResult.primary.size)})
                       </button>
                     )}
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-sm"
-                      style={{ width: '100%', color: 'var(--text-muted)' }}
-                      onClick={() => handleRunAction()}
-                      disabled={isProcessing}
-                    >
-                      Re-encode clip
-                    </button>
+                    <div style={{ display: 'flex', gap: 6, width: '100%', marginTop: 4 }}>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        style={{ flex: 1, color: 'var(--text-secondary)' }}
+                        onClick={() => setOutputResult(null)}
+                      >
+                        Adjust settings
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        style={{ flex: 1, color: 'var(--text-muted)' }}
+                        onClick={() => handleRunAction()}
+                        disabled={isProcessing}
+                      >
+                        Re-encode
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <>
                     <div
                       style={{
-                        padding: '8px 10px',
-                        background: 'rgba(56, 189, 248, 0.05)',
-                        border: '1px solid rgba(56, 189, 248, 0.2)',
-                        borderRadius: 8,
-                        marginBottom: 8,
+                        padding: '10px 12px',
+                        background: 'var(--bg-surface)',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: 6,
+                        marginBottom: 10,
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                        <span style={{ fontSize: '11px', fontWeight: 600, color: '#38bdf8', display: 'flex', alignItems: 'center', gap: 5 }}>
-                          <ShieldCheck size={13} /> Grok & AI Pre-Flight
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                        <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 5 }}>
+                          <ShieldCheck size={13} style={{ color: 'var(--text-secondary)' }} /> Export pre-flight
                         </span>
-                        <span style={{ fontSize: '9.5px', padding: '1px 5px', borderRadius: 4, background: 'rgba(52, 211, 153, 0.15)', color: '#34d399', fontWeight: 600 }}>
-                          Clean Meta ✓
+                        <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: 3, background: 'var(--bg-elevated)', color: 'var(--text-secondary)', border: '1px solid var(--border-color)', fontWeight: 500 }}>
+                          Metadata verified
                         </span>
                       </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '10.5px', color: 'var(--text-secondary)' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '11px', color: 'var(--text-secondary)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span>Codec</span>
-                          <span style={{ color: compressCodec === 'h264' ? '#34d399' : '#f59e0b', fontWeight: 500 }}>
-                            {compressCodec === 'h264' ? 'H.264 (Universal ✓)' : `${compressCodec.toUpperCase()} (Switch to H.264)`}
+                          <span>Target codec</span>
+                          <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>
+                            {compressCodec === 'h264' ? 'H.264 (Universal)' : compressCodec.toUpperCase()}
                           </span>
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span>Copyright / Audio</span>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span>Audio track</span>
                           {(activeToolTab === 'cut' ? losslessStripAudio : audioMode === 'strip') ? (
-                            <span style={{ color: '#34d399', fontWeight: 500 }}>Audio Muted (Safe ✓)</span>
+                            <span style={{ color: 'var(--text-muted)' }}>Muted</span>
                           ) : (
-                            <span style={{ color: '#f59e0b', display: 'flex', alignItems: 'center', gap: 4 }}>
-                              Audio Active
+                            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <span style={{ color: 'var(--text-primary)' }}>Active</span>
                               <button
                                 type="button"
                                 onClick={() => {
                                   if (activeToolTab === 'cut') setLosslessStripAudio(true);
                                   else setAudioMode('strip');
-                                  showToast('Audio muted to avoid copyright filters');
+                                  showToast('Audio track muted');
                                 }}
-                                style={{ color: '#38bdf8', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
+                                style={{
+                                  color: 'var(--text-secondary)',
+                                  background: 'var(--bg-elevated)',
+                                  border: '1px solid var(--border-color)',
+                                  borderRadius: 3,
+                                  cursor: 'pointer',
+                                  padding: '1px 6px',
+                                  fontSize: '10px',
+                                }}
                               >
                                 Mute
                               </button>

@@ -79,7 +79,7 @@ function BrandLogo() {
 
 export default function App() {
   // Experience Mode: 'showcase' (Awwwards AIDA landing) | 'studio' (NLE Suite)
-  const [viewMode, setViewMode] = useState('showcase');
+  const [viewMode, setViewMode] = useState('studio');
 
   // Video File & Metadata
   const [videoFile, setVideoFile] = useState(null);
@@ -938,18 +938,7 @@ export default function App() {
             <BrandLogo />
             <div className="app-brand-title-group">
               <span className="app-brand-name">VELOX<span className="app-brand-accent">CUT</span></span>
-              <span className="app-brand-badge">STUDIO</span>
             </div>
-          </div>
-
-          <div className="topbar-tool-indicator">
-            <span>Suite:</span>
-            <span className="active-tab">
-              {activeToolTab === 'compress' && <><Zap size={12} /> Compression</>}
-              {activeToolTab === 'cut' && <><Scissors size={12} /> Cut &amp; Clips</>}
-              {activeToolTab === 'audio' && <><Volume2 size={12} /> Audio</>}
-              {activeToolTab === 'media' && <><Film size={12} /> Project Media</>}
-            </span>
           </div>
         </div>
 
@@ -1090,50 +1079,6 @@ export default function App() {
 
       {/* 2. MAIN WORKSPACE BODY */}
       <div className="nle-workspace-body">
-        {/* Left Activity Rail (CapCut / Premiere Pro style) */}
-        <nav className="nle-left-rail" aria-label="Editor Tools">
-
-          <button
-            type="button"
-            className={`rail-btn ${activeToolTab === 'compress' ? 'active' : ''}`}
-            onClick={() => { setActiveToolTab('compress'); setIsInspectorOpen(true); }}
-            title="Compression & Presets"
-          >
-            <Zap size={17} />
-            <span>Compress</span>
-          </button>
-
-          <button
-            type="button"
-            className={`rail-btn ${activeToolTab === 'cut' ? 'active green' : ''}`}
-            onClick={() => { setActiveToolTab('cut'); setIsInspectorOpen(true); }}
-            title="Cut & Multi-Clip Segments"
-          >
-            <Scissors size={17} />
-            <span>Cut</span>
-          </button>
-
-          <button
-            type="button"
-            className={`rail-btn ${activeToolTab === 'audio' ? 'active' : ''}`}
-            onClick={() => { setActiveToolTab('audio'); setIsInspectorOpen(true); }}
-            title="Audio Track Settings"
-          >
-            <Volume2 size={17} />
-            <span>Audio</span>
-          </button>
-
-          <button
-            type="button"
-            className={`rail-btn ${activeToolTab === 'media' ? 'active' : ''}`}
-            onClick={() => { setActiveToolTab('media'); setIsInspectorOpen(true); }}
-            title="Project Media Asset"
-          >
-            <Film size={17} />
-            <span>Media</span>
-          </button>
-        </nav>
-
         {/* Center Stage Viewport */}
         <div className="nle-center-stage">
           <div
@@ -1155,92 +1100,52 @@ export default function App() {
                 className={`empty-hero-dropzone ${isDragOver ? 'drag-active' : ''}`}
                 onClick={() => fileInputRef.current?.click()}
               >
-                <div className="dropzone-eyebrow-badge">
-                  <ShieldCheck size={12} />
-                  <span>Client-side GPU engine</span>
-                </div>
-
                 <div className="dropzone-aperture-icon">
-                  <Film size={28} />
+                  <Film size={26} />
                 </div>
 
-                <h2>Drop video file to begin</h2>
+                <h2>Drop video to edit</h2>
                 <p>
-                  Lossless stream-copy cuts in 0.1s and GPU video compression. Everything executes locally in your browser.
+                  Instant lossless stream-copy and GPU video compression. Everything executes locally in your browser.
                 </p>
 
                 <div className="dropzone-actions">
                   <button
                     type="button"
                     className="btn btn-primary"
+                    style={{ padding: '8px 18px', borderRadius: '8px' }}
                     onClick={(e) => {
                       e.stopPropagation();
                       fileInputRef.current?.click();
                     }}
                   >
-                    <Upload size={14} /> Open Video File
+                    <Upload size={14} /> Open Video
                   </button>
                   <button
                     type="button"
                     className="btn"
+                    style={{ padding: '8px 16px', borderRadius: '8px' }}
                     onClick={(e) => {
                       e.stopPropagation();
                       handleLoadDemo();
                     }}
                   >
-                    <Play size={13} /> Try demo clip
+                    <Play size={13} /> Try Demo Clip
                   </button>
                 </div>
 
-                <div className="dropzone-feature-grid">
-                  <div className="dropzone-feat-card">
-                    <span className="dropzone-feat-icon">
-                      <Scissors size={15} />
-                    </span>
-                    <div className="dropzone-feat-text">
-                      <strong>Lossless stream-copy</strong>
-                      <span>Export cuts in 0.1s with 0% re-encoding loss</span>
-                    </div>
-                  </div>
-                  <div className="dropzone-feat-card">
-                    <span className="dropzone-feat-icon">
-                      <Cpu size={15} />
-                    </span>
-                    <div className="dropzone-feat-text">
-                      <strong>GPU hardware acceleration</strong>
-                      <span>WebCodecs GPU silicon and local NVENC</span>
-                    </div>
-                  </div>
-                  <div className="dropzone-feat-card">
-                    <span className="dropzone-feat-icon">
-                      <Sliders size={15} />
-                    </span>
-                    <div className="dropzone-feat-text">
-                      <strong>Target size control</strong>
-                      <span>Calibrated bitrate limits for Discord and web</span>
-                    </div>
-                  </div>
-                  <div className="dropzone-feat-card">
-                    <span className="dropzone-feat-icon">
-                      <ShieldCheck size={15} />
-                    </span>
-                    <div className="dropzone-feat-text">
-                      <strong>Private client processing</strong>
-                      <span>Zero server uploads; footage stays in browser</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="dropzone-specs">
-                  <span>MP4</span>
-                  <span>•</span>
-                  <span>MKV</span>
-                  <span>•</span>
-                  <span>MOV</span>
-                  <span>•</span>
-                  <span>WEBM</span>
-                  <span>•</span>
-                  <span>H.264 / HEVC / AV1</span>
+                <div className="apple-dropzone-badges">
+                  <span className="apple-dropzone-pill">
+                    <Scissors size={12} /> Lossless 0.1s
+                  </span>
+                  <span className="apple-dropzone-pill">•</span>
+                  <span className="apple-dropzone-pill">
+                    <Cpu size={12} /> GPU Accelerated
+                  </span>
+                  <span className="apple-dropzone-pill">•</span>
+                  <span className="apple-dropzone-pill">
+                    <ShieldCheck size={12} /> 100% Private
+                  </span>
                 </div>
               </div>
             ) : (
@@ -1384,10 +1289,7 @@ export default function App() {
           <aside className="nle-inspector-panel">
             <div className="inspector-header">
               <span className="inspector-title">
-                {activeToolTab === 'compress' && 'Compression Suite'}
-                {activeToolTab === 'cut' && 'Cut & Segments'}
-                {activeToolTab === 'audio' && 'Audio Track'}
-                {activeToolTab === 'media' && 'Project Media'}
+                {activeToolTab === 'cut' ? 'Trim & Cut' : 'Compression'}
               </span>
               <button
                 type="button"
@@ -1399,35 +1301,21 @@ export default function App() {
               </button>
             </div>
 
-            {/* Inspector Tab Strip */}
-            <div className="inspector-tab-strip">
+            {/* Apple Segmented Bar */}
+            <div className="apple-tab-bar">
               <button
                 type="button"
-                className={`insp-tab-btn ${activeToolTab === 'compress' ? 'active blue' : ''}`}
-                onClick={() => setActiveToolTab('compress')}
-              >
-                <Zap size={11} /> Compress
-              </button>
-              <button
-                type="button"
-                className={`insp-tab-btn ${activeToolTab === 'cut' ? 'active green' : ''}`}
+                className={`apple-tab-btn ${activeToolTab === 'cut' ? 'active' : ''}`}
                 onClick={() => setActiveToolTab('cut')}
               >
-                <Scissors size={11} /> Cut
+                <Scissors size={12} /> Trim &amp; Cut
               </button>
               <button
                 type="button"
-                className={`insp-tab-btn ${activeToolTab === 'audio' ? 'active blue' : ''}`}
-                onClick={() => setActiveToolTab('audio')}
+                className={`apple-tab-btn ${activeToolTab === 'compress' ? 'active' : ''}`}
+                onClick={() => setActiveToolTab('compress')}
               >
-                <Volume2 size={11} /> Audio
-              </button>
-              <button
-                type="button"
-                className={`insp-tab-btn ${activeToolTab === 'media' ? 'active' : ''}`}
-                onClick={() => setActiveToolTab('media')}
-              >
-                <Film size={11} /> Media
+                <Zap size={12} /> Compress
               </button>
             </div>
 
@@ -1440,61 +1328,38 @@ export default function App() {
                     <div className="inspector-group-title">
                       <span>Quick Presets</span>
                     </div>
-                    <div className="preset-chips-grid">
+                    <div className="apple-presets-grid">
                       <button
                         type="button"
-                        className={"preset-chip-card " + (activeQuickPreset === 'best' ? 'active' : '')}
+                        className={"apple-preset-pill " + (activeQuickPreset === 'best' ? 'active' : '')}
                         onClick={() => applyQuickPreset('best')}
                       >
-                        <div className="chip-title-row">
-                          <Zap size={13} className="chip-icon" />
-                          <span className="chip-title">Auto Lossless</span>
-                        </div>
-                        <span className="chip-sub">99% sharp • ~55% smaller</span>
+                        <span className="apple-preset-pill-title">Auto Lossless</span>
+                        <span className="apple-preset-pill-sub">~55% smaller</span>
                       </button>
                       <button
                         type="button"
-                        className={"preset-chip-card " + (activeQuickPreset === 'discord' ? 'active' : '')}
+                        className={"apple-preset-pill " + (activeQuickPreset === 'discord' ? 'active' : '')}
                         onClick={() => applyQuickPreset('discord')}
                       >
-                        <div className="chip-title-row">
-                          <MessageSquare size={13} className="chip-icon" />
-                          <span className="chip-title">Discord 10 MB</span>
-                        </div>
-                        <span className="chip-sub">Auto clamp bitrate</span>
+                        <span className="apple-preset-pill-title">Discord 10 MB</span>
+                        <span className="apple-preset-pill-sub">Auto clamp</span>
                       </button>
                       <button
                         type="button"
-                        className={"preset-chip-card " + (activeQuickPreset === 'grok' ? 'active' : '')}
-                        onClick={() => applyQuickPreset('grok')}
-                      >
-                        <div className="chip-title-row">
-                          <ShieldCheck size={13} className="chip-icon" style={{ color: '#38bdf8' }} />
-                          <span className="chip-title">Grok / AI Safe</span>
-                        </div>
-                        <span className="chip-sub">H.264 • Clean Meta • Muted</span>
-                      </button>
-                      <button
-                        type="button"
-                        className={"preset-chip-card " + (activeQuickPreset === 'web' ? 'active' : '')}
+                        className={"apple-preset-pill " + (activeQuickPreset === 'web' ? 'active' : '')}
                         onClick={() => applyQuickPreset('web')}
                       >
-                        <div className="chip-title-row">
-                          <Globe size={13} className="chip-icon" />
-                          <span className="chip-title">Web 25 MB</span>
-                        </div>
-                        <span className="chip-sub">1080p web share</span>
+                        <span className="apple-preset-pill-title">Web 25 MB</span>
+                        <span className="apple-preset-pill-sub">1080p share</span>
                       </button>
                       <button
                         type="button"
-                        className={"preset-chip-card " + (activeQuickPreset === 'slim' ? 'active' : '')}
+                        className={"apple-preset-pill " + (activeQuickPreset === 'slim' ? 'active' : '')}
                         onClick={() => applyQuickPreset('slim')}
                       >
-                        <div className="chip-title-row">
-                          <Smartphone size={13} className="chip-icon" />
-                          <span className="chip-title">Compact 720p</span>
-                        </div>
-                        <span className="chip-sub">Maximum shrinkage</span>
+                        <span className="apple-preset-pill-title">Compact 720p</span>
+                        <span className="apple-preset-pill-sub">Max reduction</span>
                       </button>
                     </div>
                   </div>
@@ -1695,6 +1560,28 @@ export default function App() {
                     )}
                   </div>
 
+                  <div className="inspector-group">
+                    <div className="inspector-group-title">
+                      <span>Audio Track</span>
+                    </div>
+                    <div className="segmented-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
+                      <button
+                        type="button"
+                        className={"seg-btn " + (audioMode !== 'strip' ? 'active-blue' : '')}
+                        onClick={() => setAudioMode('copy')}
+                      >
+                        Keep Audio
+                      </button>
+                      <button
+                        type="button"
+                        className={"seg-btn " + (audioMode === 'strip' ? 'active-blue' : '')}
+                        onClick={() => setAudioMode('strip')}
+                      >
+                        Mute
+                      </button>
+                    </div>
+                  </div>
+
                   <div className="size-preview-card">
                     <div className="size-row">
                       <span style={{ color: 'var(--text-secondary)' }}>Source Size</span>
@@ -1726,19 +1613,18 @@ export default function App() {
                         return (
                           <div
                             key={seg.id}
-                            className={"segment-item-card " + (isActive ? 'active' : '')}
+                            className={"apple-clip-row " + (isActive ? 'active' : '')}
                             onClick={() => {
                               setActiveSegId(seg.id);
                               setCurrentTime(seg.start);
                               if (videoRef.current) videoRef.current.currentTime = seg.start;
                             }}
                           >
-                            <div>
-                              <div className="segment-item-title">{seg.label || ("Clip " + (idx + 1))}</div>
-                              <div className="segment-item-time">
-                                {formatTimecode(seg.start)} → {formatTimecode(seg.end)} ({duration.toFixed(1)}s)
-                              </div>
-                            </div>
+                            <span className="apple-clip-index">{idx + 1}</span>
+                            <span className="apple-clip-time">
+                              {formatTimecode(seg.start)} – {formatTimecode(seg.end)}
+                            </span>
+                            <span className="apple-clip-dur">{duration.toFixed(1)}s</span>
                             {segments.length > 1 && (
                               <button
                                 type="button"
@@ -1752,8 +1638,9 @@ export default function App() {
                                   }
                                 }}
                                 title="Delete Segment"
+                                style={{ padding: 0, width: 22, height: 22 }}
                               >
-                                <Trash2 size={12} style={{ color: '#f87171' }} />
+                                <Trash2 size={12} style={{ color: 'var(--text-muted)' }} />
                               </button>
                             )}
                           </div>
@@ -1764,11 +1651,11 @@ export default function App() {
                     <button
                       type="button"
                       className="btn btn-sm btn-ghost"
-                      style={{ width: '100%', marginTop: 4 }}
+                      style={{ width: '100%', marginTop: 6, border: '1px dashed rgba(255,255,255,0.12)', borderRadius: 7 }}
                       onClick={addNewSegment}
                       disabled={!videoFile}
                     >
-                      <Plus size={13} /> Add Clip Segment
+                      <Plus size={12} /> Add Cut
                     </button>
                   </div>
 
@@ -2133,66 +2020,10 @@ export default function App() {
                   </div>
                 ) : (
                   <>
-                    <div
-                      style={{
-                        padding: '10px 12px',
-                        background: 'var(--bg-surface)',
-                        border: '1px solid var(--border-color)',
-                        borderRadius: 6,
-                        marginBottom: 10,
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                        <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 5 }}>
-                          <ShieldCheck size={13} style={{ color: 'var(--text-secondary)' }} /> Export pre-flight
-                        </span>
-                        <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: 3, background: 'var(--bg-elevated)', color: 'var(--text-secondary)', border: '1px solid var(--border-color)', fontWeight: 500 }}>
-                          Metadata verified
-                        </span>
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '11px', color: 'var(--text-secondary)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span>Target codec</span>
-                          <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>
-                            {compressCodec === 'h264' ? 'H.264 (Universal)' : compressCodec.toUpperCase()}
-                          </span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span>Audio track</span>
-                          {(activeToolTab === 'cut' ? losslessStripAudio : audioMode === 'strip') ? (
-                            <span style={{ color: 'var(--text-muted)' }}>Muted</span>
-                          ) : (
-                            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <span style={{ color: 'var(--text-primary)' }}>Active</span>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (activeToolTab === 'cut') setLosslessStripAudio(true);
-                                  else setAudioMode('strip');
-                                  showToast('Audio track muted');
-                                }}
-                                style={{
-                                  color: 'var(--text-secondary)',
-                                  background: 'var(--bg-elevated)',
-                                  border: '1px solid var(--border-color)',
-                                  borderRadius: 3,
-                                  cursor: 'pointer',
-                                  padding: '1px 6px',
-                                  fontSize: '10px',
-                                }}
-                              >
-                                Mute
-                              </button>
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
                     <button
                       type="button"
-                      className={"btn " + (activeToolTab === 'cut' ? 'btn-green' : 'btn-primary')}
-                      style={{ width: '100%', padding: '10px 14px' }}
+                      className="btn btn-primary"
+                      style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', fontWeight: 600 }}
                       disabled={isProcessing}
                       onClick={() => handleRunAction()}
                     >
@@ -2203,11 +2034,11 @@ export default function App() {
                         </>
                       ) : activeToolTab === 'cut' ? (
                         <>
-                          <Scissors size={14} /> {cutMode === 'compress' ? 'Export Compressed Cuts (H.264)' : 'Export Lossless Cut (0.2s)'}
+                          <Scissors size={13} /> {cutMode === 'compress' ? 'Export Compressed Cuts' : 'Export Lossless Cut (0.1s)'}
                         </>
                       ) : (
                         <>
-                          <Zap size={14} /> Compress Video ({compressRateMode === 'size' ? `${compressTargetMB} MB` : `CQ ${compressCrf}`})
+                          <Zap size={13} /> Compress Video ({compressRateMode === 'size' ? `${compressTargetMB} MB` : `CQ ${compressCrf}`})
                         </>
                       )}
                     </button>

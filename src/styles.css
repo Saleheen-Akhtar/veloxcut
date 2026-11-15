@@ -1,49 +1,49 @@
 /* ==========================================================================
-   VELOX // CUT — Instrument-Grade Video Trimmer & GPU Compressor
-   Clean graphite design system: quiet chrome, exact spacing, tabular meta.
+   VELOX // CUT — Apple-Minimalist Video Trimmer & GPU Compressor
+   Pure black canvas, graphite glass chrome, SF Pro typography, quiet hairlines.
    ========================================================================== */
 
 :root {
-  /* Graphite Neutral Ramp (references/tokens.md) */
-  --bg-deep: #0f0f10;
-  --bg-app: #141415;
-  --bg-surface: #19191b;
-  --bg-surface-elevated: #202023;
-  --bg-surface-hover: #27272b;
-  --bg-surface-active: #2f2f34;
-  --bg-input: #111113;
-  --bg-overlay: rgba(15, 15, 16, 0.88);
+  /* Apple Pro Dark Palette */
+  --bg-deep: #000000;
+  --bg-app: #08080a;
+  --bg-surface: #141416;
+  --bg-surface-elevated: #1c1c1e;
+  --bg-surface-hover: #242426;
+  --bg-surface-active: #2c2c2e;
+  --bg-input: #121214;
+  --bg-overlay: rgba(0, 0, 0, 0.75);
 
-  /* Quiet Hairlines (Primary text at 8-12%) */
-  --border-subtle: rgba(237, 237, 237, 0.08);
-  --border-medium: rgba(237, 237, 237, 0.14);
-  --border-strong: rgba(237, 237, 237, 0.22);
-  --border-focus: #38bdf8;
+  /* Apple Ultra-Subtle Borders & Hairlines */
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-medium: rgba(255, 255, 255, 0.14);
+  --border-strong: rgba(255, 255, 255, 0.24);
+  --border-focus: #0a84ff;
 
-  /* Three Text Roles */
-  --text-primary: #ededed;
-  --text-secondary: #a1a1a6;
-  --text-muted: #85858b;
-  --text-dim: #5c5c62;
+  /* Three Apple Text Roles */
+  --text-primary: #ffffff;
+  --text-secondary: #86868b;
+  --text-muted: #636366;
+  --text-dim: #48484a;
 
-  /* Focused Accent (Signal Sky Blue — used sparingly) */
-  --accent-blue: #38bdf8;
-  --accent-blue-hover: #0ea5e9;
-  --accent-blue-subtle: rgba(56, 189, 248, 0.1);
+  /* Apple System Blue Accent */
+  --accent-blue: #0a84ff;
+  --accent-blue-hover: #0071e3;
+  --accent-blue-subtle: rgba(10, 132, 255, 0.14);
   --accent-blue-glow: none;
 
-  /* Semantic Highlights (Toned down to sit inside graphite ramp) */
-  --accent-green: #4cc38a;
-  --accent-green-subtle: rgba(76, 195, 138, 0.1);
-  --accent-amber: #f59e0b;
-  --accent-red: #e5484d;
+  /* Apple System Green / Red */
+  --accent-green: #30d158;
+  --accent-green-subtle: rgba(48, 209, 88, 0.12);
+  --accent-amber: #ffd60a;
+  --accent-red: #ff453a;
 
-  /* Typography */
-  --font-sans: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  /* Apple System Typography */
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif;
+  --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, monospace;
   --font-display: var(--font-sans);
 
-  /* Nested Radii: inner = outer - padding */
+  /* Apple Radii */
   --radius-xs: 4px;
   --radius-sm: 6px;
   --radius-md: 8px;
@@ -52,7 +52,7 @@
 
   /* Layout Dimensions */
   --topbar-height: 48px;
-  --timeline-height: 188px;
+  --timeline-height: 180px;
   --inspector-width: 320px;
 }
 
@@ -348,62 +348,12 @@ button, input, select, textarea {
   display: flex;
   overflow: hidden;
   position: relative;
+  background: #000000;
 }
 
-/* ==================== LEFT ACTIVITY RAIL ==================== */
+/* Left Activity Rail — Removed for Apple-style minimal focus */
 .nle-left-rail {
-  width: 56px;
-  min-width: 56px;
-  height: 100%;
-  background: var(--bg-deep);
-  border-right: 1px solid var(--border-subtle);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 8px 0;
-  gap: 4px;
-  z-index: 20;
-  user-select: none;
-}
-
-.rail-btn {
-  width: 44px;
-  height: 48px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  border: 1px solid transparent;
-  color: var(--text-muted);
-  font-size: 10px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.14s ease, color 0.14s ease, border-color 0.14s ease;
-}
-
-.rail-btn:hover {
-  background: var(--bg-surface-elevated);
-  color: var(--text-primary);
-  border-color: var(--border-subtle);
-}
-
-.rail-btn.active {
-  background: var(--bg-surface-elevated);
-  color: var(--text-primary);
-  border-color: var(--border-medium);
-}
-
-.rail-btn.active.green {
-  background: var(--bg-surface-elevated);
-  color: var(--text-primary);
-  border-color: var(--border-medium);
-}
-
-.rail-btn svg {
-  color: inherit;
+  display: none !important;
 }
 
 /* Center Stage Viewport */
@@ -411,7 +361,7 @@ button, input, select, textarea {
   flex: 1;
   display: flex;
   flex-direction: column;
-  background: var(--bg-app);
+  background: #000000;
   position: relative;
   overflow: hidden;
 }
@@ -423,7 +373,7 @@ button, input, select, textarea {
   justify-content: center;
   position: relative;
   overflow: hidden;
-  background: #090a0c;
+  background: #000000;
 }
 
 .video-container video {
@@ -433,126 +383,100 @@ button, input, select, textarea {
   outline: none;
 }
 
-/* ==================== CLEAN EMPTY STATE DROPZONE ==================== */
+/* ==================== APPLE-STYLE MINIMAL DROPZONE ==================== */
 .empty-hero-dropzone {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
-  max-width: 520px;
-  padding: 40px 32px;
+  max-width: 460px;
+  padding: 56px 36px;
   margin: auto;
-  border-radius: var(--radius-lg);
-  background: var(--bg-surface);
-  border: 1px dashed var(--border-medium);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px dashed rgba(255, 255, 255, 0.12);
   cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   position: relative;
 }
 
 .empty-hero-dropzone:hover,
 .empty-hero-dropzone.drag-active {
-  border-color: var(--text-secondary);
-  background: var(--bg-surface-elevated);
+  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .dropzone-eyebrow-badge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 500;
-  padding: 3px 8px;
-  border-radius: var(--radius-xs);
-  background: var(--bg-surface-elevated);
-  color: var(--text-muted);
-  border: 1px solid var(--border-subtle);
-  margin-bottom: 20px;
+  padding: 4px 10px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-secondary);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: 24px;
 }
 
 .dropzone-aperture-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: var(--radius-md);
-  background: var(--bg-surface-elevated);
-  border: 1px solid var(--border-subtle);
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 16px;
-  color: var(--text-secondary);
+  margin-bottom: 20px;
+  color: #ffffff;
 }
 
 .empty-hero-dropzone h2 {
   font-family: var(--font-sans);
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
   margin-bottom: 8px;
-  color: var(--text-primary);
+  color: #ffffff;
 }
 
 .empty-hero-dropzone p {
   font-size: 13px;
   color: var(--text-secondary);
   line-height: 1.5;
-  margin-bottom: 24px;
-  max-width: 420px;
+  margin-bottom: 28px;
+  max-width: 360px;
 }
 
 .dropzone-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 20px;
-}
-
-/* Feature Matrix Cards Inside Dropzone */
-.dropzone-feature-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
-  width: 100%;
-  margin-bottom: 20px;
-  text-align: left;
-}
-
-.dropzone-feat-card {
-  display: flex;
-  align-items: flex-start;
   gap: 10px;
-  padding: 10px 12px;
-  border-radius: var(--radius-sm);
-  background: var(--bg-surface-elevated);
-  border: 1px solid var(--border-subtle);
+  margin-bottom: 24px;
 }
 
-.dropzone-feat-icon {
-  color: var(--text-muted);
-  margin-top: 1px;
-}
-
-.dropzone-feat-text strong {
-  display: block;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-primary);
-}
-
-.dropzone-feat-text span {
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-.dropzone-specs {
+/* Apple Dropzone Clean Feature Pills */
+.apple-dropzone-badges {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.apple-dropzone-pill {
+  font-size: 11.5px;
   color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.apple-dropzone-pill svg {
+  color: var(--text-secondary);
 }
 
 /* ==================== ON-VIDEO FLOATING HUD ==================== */
@@ -733,49 +657,128 @@ button, input, select, textarea {
   color: var(--text-primary);
 }
 
-/* ==================== INSPECTOR TAB STRIP ==================== */
-.inspector-tab-strip {
+/* ==================== APPLE SEGMENTED CONTROL ==================== */
+.apple-tab-bar {
   display: flex;
-  background: var(--bg-deep);
-  border-bottom: 1px solid var(--border-subtle);
-  padding: 4px 8px;
-  gap: 4px;
-  overflow-x: auto;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 3px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  margin: 12px 14px 8px 14px;
   flex-shrink: 0;
 }
 
-.insp-tab-btn {
+.apple-tab-btn {
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 6px 8px;
-  border-radius: var(--radius-xs);
-  border: 1px solid transparent;
+  padding: 6px 12px;
+  border-radius: 7px;
+  border: none;
   background: transparent;
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  white-space: nowrap;
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.apple-tab-btn:hover {
+  color: #ffffff;
+}
+
+.apple-tab-btn.active {
+  background: #2c2c2e;
+  color: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+/* Apple Preset Grid */
+.apple-presets-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.apple-preset-pill {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
   transition: all 0.14s ease;
 }
 
-.insp-tab-btn:hover {
-  color: var(--text-primary);
-  background: var(--bg-surface);
+.apple-preset-pill:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.16);
 }
 
-.insp-tab-btn.active {
-  background: var(--bg-surface-elevated);
-  border-color: var(--border-subtle);
-  color: var(--text-primary);
+.apple-preset-pill.active {
+  background: #2c2c2e;
+  border-color: rgba(255, 255, 255, 0.28);
 }
 
-.insp-tab-btn.active.blue,
-.insp-tab-btn.active.green {
+.apple-preset-pill-title {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.apple-preset-pill-sub {
+  font-size: 10px;
+  color: var(--text-secondary);
+  margin-top: 1px;
+}
+
+/* Apple Clip Row */
+.apple-clip-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  margin-bottom: 6px;
+  transition: all 0.12s ease;
+}
+
+.apple-clip-row.active {
+  background: rgba(10, 132, 255, 0.08);
+  border-color: rgba(10, 132, 255, 0.35);
+}
+
+.apple-clip-index {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  width: 18px;
+}
+
+.apple-clip-time {
+  font-family: var(--font-mono);
+  font-size: 11px;
   color: var(--text-primary);
+  flex: 1;
+}
+
+.apple-clip-dur {
+  font-size: 10.5px;
+  color: var(--text-secondary);
+  margin-right: 8px;
+}
+
+/* Legacy strip fallback */
+.inspector-tab-strip {
+  display: none;
 }
 
 /* ==================== SEGMENT LIST IN CUT TAB ==================== */
